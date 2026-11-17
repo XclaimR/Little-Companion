@@ -18,7 +18,9 @@ It lives on the desktop layer, under your windows. It never steals focus, never 
 
 ## Watch the film
 
-[![A Little Company: one workday with Ollie. Play the 46-second film](docs/film-poster.jpg)](docs/little-companion.mp4)
+https://github.com/user-attachments/assets/ea401cf8-5b84-4d99-8e57-911f039d2d7b
+
+
 
 *A Little Company: one workday with Ollie, 46 seconds with sound. Click the picture to play it.*
 
