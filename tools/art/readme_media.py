@@ -120,6 +120,27 @@ def portraits(sheets):
             frames.append(scaled(c, 3))
         gif(frames, DOCS + f'dog-{name}.gif', 6)
 
+BW = 32   # birds are 32x32
+
+def bird(c, sheet, frame, x, y):   # x = centre, y = feet line (1 empty row under the feet)
+    c.blit(sheet, frame * BW, 0, BW, BW, int(x - BW / 2), int(y - BW + 1))
+
+def bird_portraits(sheets):
+    """Each bird: flies in flapping, flares, lands, then perches, bobs, puts its crest up and turns to face you."""
+    flap = [14, 15, 16, 15]
+    for name, s in sheets.items():
+        frames = []
+        for i in range(28):
+            c = Canvas(64, 40, CREAM)
+            if i < 9:   # flying in on a gentle arc
+                u = i / 9; bird(c, s, flap[i % 4], 4 + 28 * u, 22 + 10 * u - 8 * (1 - (2 * u - 1) ** 2))
+            elif i < 11: bird(c, s, 18, 34, 38)                   # landing flare
+            elif i < 18: bird(c, s, 4 + (i % 2), 34, 38)          # head-bob
+            elif i < 22: bird(c, s, 1, 34, 38)                    # crest up
+            else: bird(c, s, 2, 34, 38)                           # facing you
+            frames.append(scaled(c, 3))
+        gif(frames, DOCS + f'bird-{name}.gif', 6)
+
 def moments(sheet):
     picks = [19, 23, 44, 11, 79, 72, 76, 15]   # belly-up nap, ball carry, plush shake, sit facing you, ear scratch, jump, tumble, sit facing away
     c = Canvas(len(picks) * 52 + 4, 40, CREAM)
@@ -155,4 +176,5 @@ if __name__ == '__main__':
     sheets = {n: load(RES + n + '.png') for n in ('ollie', 'biscuit', 'mochi', 'bean', 'pepper')}
     objs = load(RES + 'objects.png'); atlas = json.load(open(RES + 'objects.json'))
     moments(sheets['ollie']); portraits(sheets); hero(sheets, objs, atlas)
+    bird_portraits({n: load(RES + n + '.png') for n in ('mango', 'pearl', 'kiwi', 'sunny')})
     print(sorted(os.listdir(DOCS)))
