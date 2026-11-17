@@ -38,15 +38,23 @@ enum DogSprite {
             return base.flatMap { Frame(rawValue: $0.rawValue + Int(t * 7) % 2) }
         }
     }
-    static let pixels = CGSize(width: 48, height: 36)
+    /// Mango's frames, in the order tools/art/bird_sheet.py draws them (32×32, facing right).
+    enum Bird: Int { case idle, idleCrest, front, lookBack, bobA, bobB, lookUp, tilt, blink, hopA, hopB, peckA, peckB,
+                          takeoff, flapUp, flapMid, flapDown, glide, flare, wobble, preenA, preenB, stretch, eatA, eatB, splashA, splashB,
+                          swing, bellA, bellB, nap, sleep, dream, startled, fallA, fallB, recover, frontBlink }
+    static var pixels: CGSize { isBird ? CGSize(width: 32, height: 32) : CGSize(width: 48, height: 36) }
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }
-    static let footRows: CGFloat = 2           // empty art rows under the paws
+    static var footRows: CGFloat { isBird ? 1 : 2 }   // empty art rows under the paws (feet)
     static let scale: CGFloat = 2              // backing scale for the CoreGraphics-drawn objects
 
     /// The dogs you can have: sheet name, name, and what they are. Every sheet has the same frame layout.
     static let dogs = [("ollie", "Ollie", "beagle"), ("biscuit", "Biscuit", "shiba"), ("mochi", "Mochi", "fluffy white pup"),
                        ("bean", "Bean", "dachshund"), ("pepper", "Pepper", "border collie")]
+    /// The birds: same layout as `dogs`; their sheets are bird frames (see `Bird`).
+    static let birds = [("mango", "Mango", "cockatiel")]
+    static var isBird: Bool { birds.contains { $0.0 == dog } }
+    static var name: String { (dogs + birds).first { $0.0 == dog }?.1 ?? "Little Companion" }
     nonisolated(unsafe) static var dog = "ollie" { didSet { if dog != oldValue { cache = [:]; loaded = nil } } }
     nonisolated(unsafe) private static var loaded: CGImage?
     private static var sheet: CGImage {

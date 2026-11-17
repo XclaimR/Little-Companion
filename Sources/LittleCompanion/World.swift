@@ -10,6 +10,8 @@ import QuartzCore
     var objectLayers: [String: CALayer] = [:]
     var objectArt: [String: String] = [:]   // which picture each object shows (the bowls change)
     var kennelFront: CALayer?
+    var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse doorway
+    var windows: [Win] = [], windowsAt: CFTimeInterval = 0              // other apps' windows, polled for a bird
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
     var bedRims: [String: CALayer] = [:]
     var screenFrame: NSRect, floorY: CGFloat, minX: CGFloat, maxX: CGFloat
@@ -46,7 +48,9 @@ import QuartzCore
         let g = Self.geometry(screen)
         screenFrame = g.frame; floorY = g.floor; minX = g.minX; maxX = g.maxX
 
-        DogSprite.dog = UserDefaults.standard.string(forKey: "dog") ?? "ollie"
+        // LC_PET=mango picks the pet for this run only (testing); a pet this build doesn't know falls back to Ollie
+        let pet = ProcessInfo.processInfo.environment["LC_PET"] ?? UserDefaults.standard.string(forKey: "dog") ?? "ollie"
+        DogSprite.dog = (DogSprite.dogs + DogSprite.birds).contains { $0.0 == pet } ? pet : "ollie"
         brain = Self.loadBrain(DogSprite.dog, home: nil, minX: Double(g.minX), maxX: Double(g.maxX))
 
         panel = DesktopPanel(frame: g.frame, onTop: onTop)
@@ -114,7 +118,12 @@ import QuartzCore
         }
         render()
         tick()
-        if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
+        if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isBird {   // a bird's tour: onto a window (drag or close it), then its tree
+            Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
+            for (at, act, target) in [(24.0, Act.swing, nil), (40, .bell, nil), (50, .splash, "birdbath"), (60, .eat, "seeds"), (75, .sleep, "house")] as [(TimeInterval, Act, String?)] {
+                Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
+            }
+        } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
             if let food = brain.s.objects.first(where: { $0.kind == .foodBowl }) { brain.s.x = food.x + 70 }   // start the tour by the bowls
             let steps: [(TimeInterval, Act, String?)] = [(1, .eat, "food"), (16, .drink, "water"), (26, .sniff, "rope"), (33, .stretch, nil),
                                                          (38, .zoomies, nil), (49, .groom, nil), (63, .greet, nil), (69, .sit, nil), (77, .wander, nil), (85, .play, "ball"), (96, .carry, "rope")]
@@ -135,24 +144,41 @@ import QuartzCore
         if let saved = Store.load(dog) {
             b = Brain(state: saved.state)
             b.resume(afterOffline: Date().timeIntervalSince(saved.savedAt))
+        } else if DogSprite.isBird {   // a new bird arrives at its own tree
+            b = Brain(seed: UInt64.random(in: 1...UInt64.max), species: .bird)
+            b.s.objects = birdHome(maxX: maxX)
+            b.s.x = maxX - 160
         } else {
             b = Brain(seed: UInt64.random(in: 1...UInt64.max))
             b.s.objects = home ?? defaultObjects(width: maxX + 40)
             b.s.x = minX + 120
         }
-        repairHome(&b.s.objects, minX: minX, maxX: maxX) { Double(ObjectSprite.image(id: $0.id, kind: $0.kind.rawValue).1.width) / 2 }
+        tidy(&b.s.objects, minX: minX, maxX: maxX)
         return b
+    }
+
+    /// Keeps the home inside the floor: a dog's tidied round its kennel, a bird's tree pinned at the right end.
+    static func tidy(_ objects: inout [PetObject], minX: Double, maxX: Double) {
+        if DogSprite.isBird { repairBirdHome(&objects, maxX: maxX); return }
+        repairHome(&objects, minX: minX, maxX: maxX) { Double(ObjectSprite.image(id: $0.id, kind: $0.kind.rawValue).1.width) / 2 }
     }
 
     /// Swap in another dog: this one's life is saved, the other picks up where it left off (or arrives new, in the same home).
     func switchDog(to dog: String) {
         guard dog != DogSprite.dog else { return }
         save()
+        let wasBird = DogSprite.isBird
         let home = brain.s.objects
         DogSprite.dog = dog
         UserDefaults.standard.set(dog, forKey: "dog")
-        brain = Self.loadBrain(dog, home: home, minX: Double(minX), maxX: Double(maxX))
-        spriteKey = ""; dogOrigin = CGPoint(x: -1, y: -1)
+        brain = Self.loadBrain(dog, home: wasBird == DogSprite.isBird ? home : nil, minX: Double(minX), maxX: Double(maxX))   // a new dog moves into the old dog's home
+        spriteKey = ""; dogOrigin = CGPoint(x: -1, y: -1); dogTilt = 0
+        dogLayer.setAffineTransform(.identity)
+        dogLayer.bounds = CGRect(origin: .zero, size: DogSprite.size)
+        if wasBird != DogSprite.isBird {   // another species: rebuild the home's layers
+            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
+            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil
+        }
         render()
     }
 
@@ -189,7 +215,7 @@ import QuartzCore
         screenFrame = g.frame; floorY = g.floor; minX = g.minX; maxX = g.maxX
         panel.setFrame(g.frame, display: false)
         panel.contentView?.frame = NSRect(origin: .zero, size: g.frame.size)
-        repairHome(&brain.s.objects, minX: Double(minX), maxX: Double(maxX)) { Double(ObjectSprite.image(id: $0.id, kind: $0.kind.rawValue).1.width) / 2 }
+        Self.tidy(&brain.s.objects, minX: Double(minX), maxX: Double(maxX))
         brain.s.x = min(max(brain.s.x, Double(minX)), Double(maxX))
         dogOrigin = CGPoint(x: -1, y: -1)
         render()
@@ -259,6 +285,7 @@ import QuartzCore
         // kCGAnyInputEventType: seconds since any keyboard/mouse input. Needs no permission.
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
         let onScreen = c.x >= 0 && c.x <= screenW
+        if DogSprite.isBird { return birdEnvironment(cursor: c, idle: idle, hour: Double(now.hour ?? 12) + Double(now.minute ?? 0) / 60) }
         return Environment(minX: Double(minX), maxX: Double(maxX),
                            hour: Double(now.hour ?? 12) + Double(now.minute ?? 0) / 60,
                            userIdle: idle,
@@ -311,6 +338,7 @@ import QuartzCore
         if brain.s.jumpAt != nil { interval = 1.0 / 30 }    // smooth arc
         if now < blinkUntil { interval = min(interval, blinkUntil - now + 0.01) }
         if p.hidden { interval = 1.0 }                      // inside the kennel: nothing to draw
+        if DogSprite.isBird { interval = birdInterval(p, else: interval) }
         if p.twitch { interval = 1.0 / 8 }                  // dreaming: paddling paws
         if isHidden || occluded { interval = 1.0 }
         if ProcessInfo.processInfo.isLowPowerModeEnabled { interval = max(interval, 1.0 / 10) }
@@ -381,6 +409,7 @@ import QuartzCore
     func render() { render(brain.pose) }
 
     func render(_ p: Pose) {
+        if DogSprite.isBird { renderBird(p); return }
         let r = dogRect(p)
         lastPose = p; lastRect = r
         let t = CACurrentMediaTime()

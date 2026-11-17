@@ -22,7 +22,7 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 ## Windows
 1. **Desktop layer** — transparent full-screen window above desktop icons, below normal windows. Main display only, all Spaces, not over full-screen apps. Windows occlude the dog like icons. Only dog/kennel/toy clicks are caught; everything else passes through.
 2. **House popup** — ~480×320, opens above the kennel on click; closes on Esc / click-outside / kennel click.
-3. **Menu bar icon only**, no Dock icon. As built: the dog's name · Change dog ▸ (Ollie, Biscuit, Mochi, Bean, Pepper) · Hide for an hour · Open at login (installed app) · Quit. Planned: Open house · Call dog home (a suggestion).
+3. **Menu bar icon only**, no Dock icon. As built: the dog's name · Change pet ▸ Dogs ▸ (Ollie, Biscuit, Mochi, Bean, Pepper) / Birds ▸ (Mango) · Hide for an hour · Open at login (installed app) · Quit. Planned: Open house · Call dog home (a suggestion).
 
 ## Desktop world
 - Side-on with gravity. Platforms: floor (above Dock), window title-bar tops, desktop icons (via read-only Finder AppleScript, asked once; skipped if denied). Brief screen-edge climbs.
@@ -74,6 +74,20 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 - **Energy:** the z's puff once every 15–30 s (none while you're away) instead of animating all night; drawing is skipped while the dog is under a window, and capped at 10 fps in Low Power Mode. Wags, grooming and blinks tick at their own pace.
 - **Saves:** a save from a newer build is never overwritten (the menu says so); an unreadable one is moved aside first (named after the dog), and if that fails it's left alone.
 
+## Birds (branch `feature/birds`)
+One pet at a time; each keeps its own save (`state-mango.json`). Same engine as the dogs (`Brain`, needs, personality, learning, utility scoring); a species is data: its acts, its home and its movement. A dog walks the floor; a bird hops along a perch and flies between perches at different heights (`Sources/PetCore/Bird.swift`). Saves stay compatible: every bird field is optional and a dog's seed rolls the same dog as before.
+
+- **Mango the cockatiel:** 32×32 art px at 1.5 pt/px, grey with a yellow face and crest and orange cheeks, 38 frames from `tools/art/bird_sheet.py` (perched, head-bob, look up/back, head tilt, blink, front; hop, peck; take-off, 4-step flap cycle, glide, landing flare, wobbly landing; preen, stretch, eat, splash; swing, bell; fluffed nap, head-tucked sleep, dream; startled, tumbling fall, recovery flap). Crest is mood: up when excited or startled, flat when relaxed.
+- **Home:** a tall tree at the right end of the floor (84 px, ~1.6× the kennel) with four branches, a birdhouse on the trunk two-thirds up, a swing under the lowest branch, a bell under the top one, and seed and water dishes at its foot. The birdhouse is the kennel: it sleeps there at night and flies in while the Mac is busy (same rule), and you see its shadow through the round doorway. Perch geometry lives in `enum Tree` (mirrors `tools/art/bird_home.py`).
+- **Perches:** branches, the floor (top of the Dock) and the top edges of other apps' windows. A window counts only if it's an ordinary window (layer 0, not ours, visible), ≥ 200 pt wide, with ≥ 48 pt clear above it (so not maximised under the menu bar), on the bird's screen, at a spot no window in front covers, and ≥ 96 pt in from its left (clear of the traffic lights).
+- **Traits:** curious → visits windows more; energetic → flies more; affectionate → now and then (≤ every 10 min) moves to the window top nearest where you're working; clumsy → wobbly landings.
+- **Flights:** a few an hour of its own choosing, plus trips to the dishes, swing, bell and birdhouse (`simrun`: ~10–15 per awake hour in all). Each flight is a Bézier arc; of four arcs it takes the one most out in the open (through gaps between windows); otherwise it is glimpsed passing behind them. Always on the desktop layer, never over your work.
+- **Windows:** polled with `CGWindowListCopyWindowInfo` (no permission) ~15 Hz while it's on or flying to a window, ~1 Hz otherwise. Dragged → it rides along, balancing; flaps off if it's flung (> 1800 pt/s) or dragged for more than ~3–6 s. Closed (the window id no longer exists) → startled tumble, recovery flaps, flies on. Minimised or another Space (it still exists) → calm fly-off. Covered by another window → leaves after ~4 s. Maximised → leaves.
+- **You:** it notices the cursor only near its perch (a glance and a head tilt); the cursor never steers it. A click on it: startled, crest up, sometimes a hop or a short flight. Back after 30+ min: crest up, a little hop, it faces you wherever it's perched.
+- **Day / night:** eats, drinks, splashes, swings, rings its bell, preens, stretches, naps fluffed on a branch; nights in the birdhouse with dream twitches.
+- **Testing:** `LC_PET=mango` picks the bird for one run without changing the saved choice (`LC_DEMO=1` then tours a window and the tree); with `LC_DEBUG=1` the 🐾 menu has "fly to a window", "pretend its window closed", swing, bell, splash and birdhouse. Tests cover window perch choice, riding a drag, flinging, falling when its window closes, minimise, covering, the busy retreat and four simulated days; `simrun [dogs] [hours] [seed] [birds]` checks a bird stays on screen and on its window's edge, never sits on a vanished window, sleeps 30–80%, retreats when busy and flies a few times an hour.
+- **Verified on screen** (LC_TOP recording): flight onto a real window's top edge, riding a 300 pt drag, the fall/recovery when the window closed, swing, bell, splash, birdhouse sleep with its doorway shadow. Not yet seen on screen: the cursor head tilt, a click startle, covered/minimised fly-offs (unit-tested only).
+
 ## Tooling & persistence
 - Headless runner (`simrun`): fast-forwards dogs through simulated workdays (~0.3 s per day), checks invariants (needs in range, on the floor, never stuck awake 20 min, no maxed need for an hour, sleep 30–80%, no awake act > 30%, ≥ 8 different acts), prints histogram, per-object preferences and an hourly timeline.
 - Tests (`swift test`): six seeded days hold invariants; same seed → same day; dogs differ (favourite toy, routine); enjoyable toy becomes a favourite; state round-trips through JSON.
@@ -101,7 +115,7 @@ Unlock/purchase economy, multi-monitor, sound, dragging the dog, settings beyond
 
 ## TODO (post-MVP)
 - [ ] **Random, stochastic elements in the world.** Now and then (every few days, only when the user is around) something new appears: a tennis ball, a stick, a leaf in autumn, at most one new thing at a time. The engine already handles novelty (`Brain.add`: the "!" / "?" reactions, sniffing, learning to like or ignore it); only the app never adds anything yet, so after a week preferences settle and days look alike.
-- [ ] **Species choice: dog, cat, bird.** Picked at adoption; one pet at a time until multi-pet lands.
+- [ ] **Species choice: dog, cat, bird.** (Birds: see above, on `feature/birds`.) Picked at adoption; one pet at a time until multi-pet lands.
   - Keep species out of the engine core: a species is data (actions, animations, trait ranges, movement profile) plugged into the same utility engine.
   - **Cat:** higher jumps, likes high ledges (window tops, icons), more independent/aloof defaults, naps in sunbeams/boxes, knocks small toys off ledges.
   - **Bird:** breaks the gravity-only movement model — needs a flight movement profile (perch → fly → perch). Perches on window tops, icons and the kennel (birdhouse/cage variant). Needs its own home interior.

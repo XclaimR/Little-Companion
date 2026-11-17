@@ -12,13 +12,14 @@ public struct Brain: Sendable {
     /// Seconds without input after which the user counts as away (sleep is likelier; coming back is a welcome).
     public static let awayAfter = 600.0
 
-    public init(seed: UInt64) {
+    public init(seed: UInt64, species: Species = .dog) {
         var rng = SplitMix(seed: seed)
         let p = Personality.random(&rng)
         var innate: [Kind: Double] = [:]
-        for k in Kind.allCases { innate[k] = Double.random(in: -0.5...0.8, using: &rng) }
+        for k in species == .bird ? Kind.allCases : Kind.dogKinds { innate[k] = Double.random(in: -0.5...0.8, using: &rng) }
         s = DogState(personality: p, innate: innate,
                      activity: Activity(act: .idle, target: nil, destX: nil, remaining: 3, started: 0), rng: rng)
+        if species == .bird { s.species = .bird; s.perch = "floor" }
     }
 
     public init(state: DogState) { s = state }
@@ -26,6 +27,7 @@ public struct Brain: Sendable {
     // MARK: - Public API
 
     public mutating func update(dt: Double, env: Environment) {
+        if isBird { updateBird(dt, env); return }
         s.time += dt
         let circ = Self.sleepiness(hour: env.hour)
         calm = env.reduceMotion
@@ -115,6 +117,7 @@ public struct Brain: Sendable {
     /// The user is back (after being away, or after the Mac slept). Greeting is likelier for a few minutes, and if the
     /// cursor isn't near the floor the dog says hello where it is: up from a light doze, sits facing you and wags.
     public mutating func welcomeBack(env: Environment) {
+        if isBird { birdWelcome(env); return }
         s.greetBoostUntil = s.time + 180
         guard env.cursorX == nil else { return }   // the cursor's near: it may come and greet you properly
         let a = s.activity
@@ -137,6 +140,7 @@ public struct Brain: Sendable {
 
     /// A click on the dog: a nudge it may ignore, never a command.
     public mutating func poke(env: Environment) {
+        if isBird { birdPoke(env); return }
         let a = s.activity
         if a.act == .kennel && a.kennel != .door { return }   // can't be clicked while it's in its kennel
         if a.act == .sleep && a.destX == nil {
@@ -169,6 +173,7 @@ public struct Brain: Sendable {
     public mutating func debugStart(_ act: Act, target: String?, env: Environment) {
         calm = env.reduceMotion
         s.attention = nil
+        if isBird { finish(); birdStart(act, target: target, env); return }
         finish(); start(act, target: target, env)
         if act == .kennel, s.objects.contains(where: { $0.id == target }) { s.activity.running = true }
         if act == .sleep { s.needs.tiredness = max(s.needs.tiredness, 0.6); s.nextDream = s.time + 4 }   // dream soon, for testing
@@ -186,6 +191,7 @@ public struct Brain: Sendable {
         s.needs.boredom += (0.3 - s.needs.boredom) * k
         var spot = s.objects.filter { $0.kind.isSleepSpot }.max { pref($0) < pref($1) }
         if let o = spot, pref(o) < floorPref { spot = nil } // prefers the floor
+        if isBird { birdResume(); return }
         if let spot { s.x = spot.x }
         s.carrying = nil
         s.activity = Activity(act: .sleep, target: spot?.id, destX: nil, remaining: rand(20...90), started: s.time)
@@ -193,6 +199,7 @@ public struct Brain: Sendable {
     }
 
     public var pose: Pose {
+        if isBird { return birdPose }
         let a = s.activity
         let anim: Anim
         if a.destX != nil {
@@ -270,9 +277,9 @@ public struct Brain: Sendable {
         } else if a.act == .sleep && a.destX == nil {
             s.needs.tiredness -= dt / (3 * 3600) * (1.2 - 0.6 * circ) // sleeps deeper/longer at night
         } else {
-            let effort = a.act == .zoomies ? 4.0 : a.act == .play ? 2.5 : a.destX != nil ? 1.5 : 1.0
+            let effort = a.act == .zoomies ? 4.0 : a.act == .play ? 2.5 : a.destX != nil || s.flight != nil ? 1.5 : 1.0
             s.needs.tiredness += dt / (5 * 3600) * effort * (0.6 + 0.8 * circ) * (1.2 - 0.6 * p.energy + 0.3 * p.laziness)
-            if a.act != .play && a.act != .zoomies { s.needs.boredom += dt / (1.5 * 3600) * (0.5 + p.playfulness) }
+            if ![.play, .zoomies, .swing, .bell, .splash].contains(a.act) { s.needs.boredom += dt / (1.5 * 3600) * (0.5 + p.playfulness) }
         }
         s.needs.clamp()
     }
@@ -300,7 +307,6 @@ public struct Brain: Sendable {
         // Sleep: tiredness × clock × laziness, boosted while you're away; per spot by preference.
         let away = env.userIdle > Brain.awayAfter ? 1.8 : 1
         let night = 1 - 0.9 * circ // energetic acts fade at night
-        let lastTarget = s.memory.last?.target
         let sleepBase = (pow(n.tiredness, 1.5) * (0.4 + circ) * (0.6 + 0.8 * p.laziness) * away * (n.tiredness < 0.2 * (1 - circ) ? 0.05 : 1) * 4
                          + 1.2 * max(0, circ - 0.7) / 0.3 * (0.5 + p.laziness))   // at night it dozes off again easily, rested or not
         for o in s.objects where o.kind.isSleepSpot { c.append(.init(act: .sleep, target: o.id, score: sleepBase * f(pref(o)))) }
@@ -341,7 +347,13 @@ public struct Brain: Sendable {
             c.append(.init(act: .greet, target: nil, score: boost * (0.3 + p.affection) * (1.2 - p.independence)))
         }
 
-        // History: no immediate repeats (except sleep), cooldowns, then noise.
+        applyHistory(&c)
+        return c
+    }
+
+    /// History: no immediate repeats (except sleep), cooldowns, then noise.
+    mutating func applyHistory(_ c: inout [Candidate]) {
+        let lastTarget = s.memory.last?.target
         for i in c.indices {
             let a = c[i].act
             if a == s.activity.act && a != .sleep { c[i].score *= 0.35 }
@@ -350,7 +362,6 @@ public struct Brain: Sendable {
             if let last = s.lastDone[a], s.time - last < a.cooldown { c[i].score *= 0.05 }
             c[i].score *= exp(gauss() * 0.3)
         }
-        return c
     }
 
     mutating func decide(_ env: Environment) {
@@ -358,7 +369,7 @@ public struct Brain: Sendable {
             s.pendingCarry = nil
             if s.objects.contains(where: { $0.id == t }) { start(.carry, target: t, env); return }
         }
-        let c = candidates(env)
+        let c = isBird ? birdCandidates(env) : candidates(env)
         lastScores = c.sorted { $0.score > $1.score }.prefix(6).map { "\($0.act.rawValue)\($0.target.map { ":" + $0 } ?? "") \(String(format: "%.2f", $0.score))" }
         let pick: Candidate
         if rand(0...1) < 0.03 {
@@ -371,7 +382,7 @@ public struct Brain: Sendable {
             for (i, wi) in w.enumerated() { r -= wi; if r <= 0 { chosen = c[i]; break } }
             pick = chosen
         }
-        start(pick.act, target: pick.target, env)
+        if isBird { birdStart(pick.act, target: pick.target, env) } else { start(pick.act, target: pick.target, env) }
     }
 
     mutating func start(_ act: Act, target: String?, _ env: Environment) {

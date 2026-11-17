@@ -30,6 +30,9 @@ public struct Personality: Codable, Sendable, Equatable {
 public enum Kind: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable {
     case bed, rug, foodBowl, waterBowl, ball, plush, rope, kennel
     case floor // not placeable: "sleeping on the bare floor" as a sleep spot with its own preference
+    case tree, seedDish, waterDish   // a bird's home: its tree (branches, birdhouse, swing, bell) and its dishes
+    /// A dog's kinds, in the order its innate tastes are rolled (bird kinds come after, so a dog's seed rolls the same dog).
+    public static let dogKinds: [Kind] = [.bed, .rug, .foodBowl, .waterBowl, .ball, .plush, .rope, .kennel, .floor]
     public var isToy: Bool { self == .ball || self == .plush || self == .rope }
     public var isSleepSpot: Bool { self == .bed || self == .rug }
 }
@@ -46,6 +49,7 @@ public struct PetObject: Codable, Sendable, Identifiable, Equatable {
 
 public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable {
     case idle, sit, lookAround, wander, sniff, sleep, stretch, groom, eat, drink, play, carry, zoomies, greet, react, follow, kennel
+    case fly, hop, peck, splash, swing, bell   // a bird's: off to another perch, hopping along it, pecking the floor, bathing, its swing and bell
 
     /// Running pace (Activity.running), points/s.
     static let runSpeed = 130.0
@@ -55,7 +59,8 @@ public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable
     /// Minimum seconds before the same act scores normally again.
     var cooldown: Double {
         switch self {
-        case .zoomies: 1800; case .greet: 600; case .follow: 90; case .kennel: 1800; case .eat: 1200; case .drink: 600; case .stretch: 120; default: 0
+        case .zoomies: 1800; case .greet: 600; case .follow: 90; case .kennel: 1800; case .eat: 1200; case .drink: 600; case .stretch: 120
+        case .splash: 1800; case .swing: 1200; case .bell: 1200; default: 0
         }
     }
 
@@ -66,6 +71,7 @@ public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable
         case .sniff: 3...8; case .sleep: 900...5400; case .stretch: 2.5...3.5; case .groom: 6...15
         case .eat: 15...30; case .drink: 5...10; case .play: 15...60; case .carry: 1...2
         case .zoomies: 6...12; case .greet: 5...12; case .react: 1...1.5; case .follow: 6...14; case .kennel: 180...900
+        case .fly: 4...20; case .hop: 3...8; case .peck: 8...25; case .splash: 5...10; case .swing: 15...45; case .bell: 3...7
         }
     }
 }
@@ -159,6 +165,17 @@ public struct DogState: Codable, Sendable, Equatable {
     public var fallKind: FallKind?
     public var fallSpeed: Double?       // how fast it was going, for the slide
     public var pendingCarry: String?    // pick this toy up and trot off with it next
+    // A bird's (see Bird.swift); nil for a dog.
+    public var species: Species?        // nil: a dog (every save before birds)
+    public var y: Double?               // feet, in screen points from the top (perched: follows its perch)
+    public var perch: String?           // "floor", "b0"…"b3" (branches), "swing", "bell", "house", "w:<window id>"
+    public var perchDX: Double?         // on a window: how far along its top edge from the left
+    public var flight: Flight?          // in the air
+    public var rideSince: Double?, rideLast: Double?   // riding a window being dragged: since, and last moved
+    public var coveredSince: Double?    // its window's top edge has been covered by another window since
+    public var wobbleUntil: Double?     // balancing (a wobbly landing, or riding a moving window)
+    public var crestUntil: Double?      // crest up (excited or startled) until then
+    public var lastNearYou: Double?     // last moved to a window near your recent activity
 }
 
 /// What the outside world tells the brain each tick.
@@ -175,6 +192,12 @@ public struct Environment: Sendable {
     /// How far its mouth reaches ahead of its centre with the head down (from the art): where it stands to eat,
     /// drink or sniff, so its mouth is over the middle of the bowl or toy and its paws stay clear of the rim.
     public var mouthReach: Double
+    // A bird's world (screen points, top-left origin). A dog ignores these.
+    public var floorY: Double = 0       // top of the Dock: the floor
+    public var topY: Double = 0         // just under the menu bar
+    public var cursorY: Double?         // a bird's cursor is anywhere on its screen (cursorX too)
+    public var windows: [Win] = []      // other apps' ordinary windows on its screen, front to back
+    public var windowClosed = false     // the window it's perched on has gone because it was closed (not minimised or another Space)
     public init(minX: Double, maxX: Double, hour: Double, userIdle: Double, cursorX: Double?, systemBusy: Bool = false,
                 reduceMotion: Bool = false, kennelDoorOutside: Double = 88, kennelInside: ClosedRange<Double> = -16...0, mouthReach: Double = 28) {
         self.minX = minX; self.maxX = maxX; self.hour = hour; self.userIdle = userIdle; self.cursorX = cursorX; self.systemBusy = systemBusy
@@ -211,6 +234,12 @@ public struct Pose: Sendable, Equatable {
     public var fall: FallStage? = nil       // where it is in a stumble
     public var pace = 1.0                   // eating/drinking speed: gulpers chew and lap faster
     public var stretchBack = false          // second half of a stretch: the hind legs
+    // A bird's
+    public var y: Double? = nil             // feet, screen points from the top
+    public var act: Act? = nil
+    public var flight: FlightStage? = nil   // in the air, and how
+    public var crest = false                // crest up: excited or startled
+    public var wobble = false               // balancing
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.

@@ -84,6 +84,8 @@ if __name__ == '__main__':
         it = items[k]
         grids[k] = [[None if ch == '.' else ch for ch in row.replace('|', '')] for row in it['rows']]
         KEYS[k] = {ch: tok for ch, tok in it['keys'].items() if ch != '.'}
+    import bird_home   # a bird's home rides in the same atlas, after the dogs' things
+    grids.update(bird_home.grids()); KEYS.update(bird_home.KEYS)
     order = list(grids)
     H = max(len(g) for g in grids.values()); gap = 2
     rects, x = {}, 0

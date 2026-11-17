@@ -11,7 +11,7 @@ app.run()
     var world: World?
     var statusItem: NSStatusItem?
     let header = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    let dogMenu = NSMenu()
+    var petItems: [NSMenuItem] = []
     let hideItem = NSMenuItem(title: "Hide for an hour", action: #selector(toggleHide), keyEquivalent: "")
     let readOnlyNote = NSMenuItem(title: "Saved by a newer version — not saving", action: nil, keyEquivalent: "")
 
@@ -25,12 +25,18 @@ app.run()
         menu.addItem(header)
         readOnlyNote.isEnabled = false
         menu.addItem(readOnlyNote)
-        let dogs = menu.addItem(withTitle: "Change dog", action: nil, keyEquivalent: "")
-        for (id, name, kind) in DogSprite.dogs {
-            let item = dogMenu.addItem(withTitle: "\(name) — \(kind)", action: #selector(pickDog(_:)), keyEquivalent: "")
-            item.target = self; item.representedObject = id
+        let pets = menu.addItem(withTitle: "Change pet", action: nil, keyEquivalent: "")
+        let species = NSMenu()
+        for (title, list) in [("Dogs", DogSprite.dogs), ("Birds", DogSprite.birds)] {   // Change pet ▸ Dogs ▸ … / Birds ▸ …
+            let group = NSMenu()
+            for (id, name, kind) in list {
+                let item = group.addItem(withTitle: "\(name) — \(kind)", action: #selector(pickDog(_:)), keyEquivalent: "")
+                item.target = self; item.representedObject = id
+                petItems.append(item)
+            }
+            species.setSubmenu(group, for: species.addItem(withTitle: title, action: nil, keyEquivalent: ""))
         }
-        menu.setSubmenu(dogMenu, for: dogs)
+        menu.setSubmenu(species, for: pets)
         hideItem.target = self
         menu.addItem(hideItem)
         menu.addItem(.separator())
@@ -39,7 +45,10 @@ app.run()
                                  ("Test: go to the kennel", #selector(testKennel)), ("Test: zoomies", #selector(testZoomies)),
                                  ("Test: follow the cursor", #selector(testFollow)), ("Test: sit", #selector(testSit)), ("Test: eat", #selector(testEat)), ("Test: drink", #selector(testDrink)), ("Test: groom", #selector(testGroom)),
                                  ("Test: trip", #selector(testTrip)), ("Test: tumble", #selector(testTumble)),
-                                 ("Test: busy Mac on/off", #selector(testBusy))] {
+                                 ("Test: busy Mac on/off", #selector(testBusy)),
+                                 ("Test (bird): fly to a window", #selector(testFlyToWindow)), ("Test (bird): pretend its window closed", #selector(testWindowClosed)),
+                                 ("Test (bird): swing", #selector(testSwing)), ("Test (bird): ring the bell", #selector(testBell)),
+                                 ("Test (bird): splash", #selector(testSplash)), ("Test (bird): sleep in the birdhouse", #selector(testHouseSleep))] {
                 menu.addItem(withTitle: title, action: sel, keyEquivalent: "").target = self
             }
             menu.addItem(.separator())
@@ -79,9 +88,9 @@ app.run()
     }
 
     func refreshDogMenu() {
-        let name = DogSprite.dogs.first { $0.0 == DogSprite.dog }?.1 ?? "Little Companion"
+        let name = DogSprite.name
         header.title = name
-        for item in dogMenu.items { item.state = item.representedObject as? String == DogSprite.dog ? .on : .off }
+        for item in petItems { item.state = item.representedObject as? String == DogSprite.dog ? .on : .off }
         hideItem.title = world?.isHidden == true ? "Show \(name) now" : "Hide for an hour"
         readOnlyNote.isHidden = !Store.readOnly.contains(DogSprite.dog)
     }
@@ -92,7 +101,13 @@ app.run()
 
     @objc func testBall() { world?.test(.play, "ball") }
     @objc func testPlush() { world?.test(.play, "plush") }
-    @objc func testKennel() { world?.test(.kennel, "kennel") }
+    @objc func testKennel() { world?.test(.kennel, DogSprite.isBird ? "house" : "kennel") }
+    @objc func testFlyToWindow() { world?.testFlyToWindow() }
+    @objc func testWindowClosed() { world?.testWindowClosed() }
+    @objc func testSwing() { world?.test(.swing) }
+    @objc func testBell() { world?.test(.bell) }
+    @objc func testSplash() { world?.test(.splash, "birdbath") }
+    @objc func testHouseSleep() { world?.test(.sleep, "house") }
     @objc func testZoomies() { world?.test(.zoomies) }
     @objc func testFollow() { world?.test(.follow) }
     @objc func testSit() { world?.test(.sit) }

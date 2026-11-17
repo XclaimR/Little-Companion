@@ -28,17 +28,27 @@ final class ClickView: NSView {
 }
 
 /// Other apps' ordinary windows, front-to-back, in top-left-origin points. Bounds need no permission.
-func otherWindowRects() -> [CGRect] {
+func otherWindowRects() -> [CGRect] { otherWindows().map(\.rect) }
+
+/// The same with each window's id (a bird tracks the one it's perched on). Invisible (alpha 0) windows are skipped.
+func otherWindows() -> [(id: Int, rect: CGRect)] {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
     else { return [] }
     let me = ProcessInfo.processInfo.processIdentifier
     return list.compactMap { d in
         guard d[kCGWindowLayer as String] as? Int == 0,
               d[kCGWindowOwnerPID as String] as? Int32 != me,
+              (d[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+              let id = d[kCGWindowNumber as String] as? Int,
               let b = d[kCGWindowBounds as String] as? NSDictionary,
               let r = CGRect(dictionaryRepresentation: b),
               r.width >= 80, r.height >= 40
         else { return nil }
-        return r
+        return (id, r)
     }
+}
+
+/// Whether a window still exists anywhere (minimised or on another Space counts); false once it's closed.
+func windowExists(_ id: Int) -> Bool {
+    ((CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(id)) as? [[String: Any]]) ?? []).isEmpty == false
 }
