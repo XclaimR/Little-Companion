@@ -39,7 +39,7 @@ public enum FlightStage: String, Sendable { case takeoff, flap, glide, flare, fa
 public enum Tree {
     public struct Ledge: Sendable { public var from, to, h: Double }
     static let k = 1.5
-    public static let branches = [Ledge(from: -26 * k, to: -12 * k, h: 26 * k),   // b0: the swing hangs from it
+    public static let branches = [Ledge(from: -26 * k, to: -12 * k, h: 44 * k),   // b0: the swing hangs from it
                                   Ledge(from: 10 * k, to: 20 * k, h: 40 * k),     // b1: the bell hangs from its tip
                                   Ledge(from: -26 * k, to: -14 * k, h: 64 * k),   // b2
                                   Ledge(from: 8 * k, to: 22 * k, h: 66 * k)]      // b3, under the crown

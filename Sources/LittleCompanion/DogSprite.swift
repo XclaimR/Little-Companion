@@ -41,7 +41,7 @@ enum DogSprite {
     /// Mango's frames, in the order tools/art/bird_sheet.py draws them (32×32, facing right).
     enum Bird: Int { case idle, idleCrest, front, lookBack, bobA, bobB, lookUp, tilt, blink, hopA, hopB, peckA, peckB,
                           takeoff, flapUp, flapMid, flapDown, glide, flare, wobble, preenA, preenB, stretch, eatA, eatB, splashA, splashB,
-                          swing, bellA, bellB, nap, sleep, dream, startled, fallA, fallB, recover, frontBlink }
+                          swing, bellA, bellB, nap, sleep, dream, startled, fallA, fallB, recover, frontBlink, recoverB }
     static var pixels: CGSize { isBird ? CGSize(width: 32, height: 32) : CGSize(width: 48, height: 36) }
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }
@@ -52,7 +52,7 @@ enum DogSprite {
     static let dogs = [("ollie", "Ollie", "beagle"), ("biscuit", "Biscuit", "shiba"), ("mochi", "Mochi", "fluffy white pup"),
                        ("bean", "Bean", "dachshund"), ("pepper", "Pepper", "border collie")]
     /// The birds: same layout as `dogs`; their sheets are bird frames (see `Bird`).
-    static let birds = [("mango", "Mango", "cockatiel")]
+    static let birds = [("mango", "Mango", "cockatiel"), ("pearl", "Pearl", "lutino cockatiel"), ("kiwi", "Kiwi", "budgie"), ("sunny", "Sunny", "sun conure")]
     static var isBird: Bool { birds.contains { $0.0 == dog } }
     static var name: String { (dogs + birds).first { $0.0 == dog }?.1 ?? "Little Companion" }
     nonisolated(unsafe) static var dog = "ollie" { didSet { if dog != oldValue { cache = [:]; loaded = nil } } }

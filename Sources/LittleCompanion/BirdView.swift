@@ -47,7 +47,7 @@ extension World {
             case .glide: return .glide
             case .flare: return .flare
             case .fall: return Int(t * 7) % 2 == 0 ? .fallA : .fallB        // tumbling, wings flailing
-            case .recover: return Int(t * 14) % 2 == 0 ? .recover : .flapDown
+            case .recover: return Int(t * 14) % 2 == 0 ? .recover : .recoverB   // hard flaps, same posture
             }
         }
         if p.inKennel { return p.anim == .sleep ? (p.twitch && Int(t * 6) % 2 == 0 ? .dream : .sleep) : .nap }
@@ -84,7 +84,7 @@ extension World {
         let ringing = p.act == .bell && p.flight == nil && brain.s.perch == "bell"
         let swingA: CGFloat = swinging && !calm ? CGFloat(sin(t * 2.4) * 0.3) : 0
         var feetX = CGFloat(p.x), feetY = CGFloat(p.y ?? Double(floorY))
-        let rope = 13 * pp   // pivot (under branch 0) to the seat
+        let rope = 31 * pp   // pivot (under branch 0) to the seat
         if swinging { feetX += rope * sin(swingA); feetY -= rope * (1 - cos(swingA)) }
         let lift = p.jump.map { CGFloat(4 * $0 * (1 - $0) * p.jumpHeight) } ?? 0
         let size = DogSprite.size
@@ -154,7 +154,7 @@ extension World {
         }
         swingLayer = hanging(swingLayer, art: "swing")
         bellLayer = hanging(bellLayer, art: "bell")
-        for (l, dx, top, angle) in [(swingLayer!, -19.0, 23.0, swing), (bellLayer!, 20.0, 63.0, bell)] {   // from tools/art/bird_home.py
+        for (l, dx, top, angle) in [(swingLayer!, -19.0, 41.0, swing), (bellLayer!, 20.0, 63.0, bell)] {   // from tools/art/bird_home.py
             let pos = CGPoint(x: (treeX + CGFloat(dx) * pp).rounded(), y: (screenH - floorY + CGFloat(top) * pp).rounded())
             if l.position != pos { l.position = pos }
             l.setAffineTransform(CGAffineTransform(rotationAngle: angle))

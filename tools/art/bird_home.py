@@ -5,11 +5,11 @@
 import json, math, os
 
 TW, TH, CX = 64, 84, 32                     # tree: width, height, trunk centre column (dx 0)
-BRANCHES = [(-1, 30, 26), (1, 23, 40), (-1, 30, 64), (1, 25, 66)]   # side, reach (px from the trunk centre), top height
+BRANCHES = [(-1, 30, 44), (1, 23, 40), (-1, 30, 64), (1, 25, 66)]   # side, reach (px from the trunk centre), top height
 HOUSE = dict(left=-9, right=9, bottom=46, top=62, roof=68)          # birdhouse on the trunk, about two-thirds up
 ENTRANCE = (0, 54, 3.3)                                              # dx, h, radius: the round doorway (its shadow shows here)
 PEG = 48                                                             # the little perch under the doorway
-SWING = (-19, 23, 10)                                                # dx, top of the ropes (just under b0), seat top height
+SWING = (-19, 41, 10)                                                # dx, top of the ropes (just under b0), seat top height
 BELL = (20, 63, 59)                                                  # dx, string top (under b3), bell centre height
 
 def blank(w, h): return [[None] * w for _ in range(h)]
@@ -76,7 +76,7 @@ def tree():
 
 def swing():
     dx, top, seat = SWING
-    w, h = 13, top - seat + 2
+    w, h = 15, top - seat + 2
     g = blank(w, h)
     for y in range(h - 2):
         g[y][1] = g[y][w - 2] = 'c'
@@ -132,7 +132,7 @@ if __name__ == '__main__':
                             if 0 <= Y < H * S and 0 <= X < W * S: img[Y][X] = c
     tx = 150
     blit(G['tree'], KEYS['tree'], tx - CX, floor)
-    blit(G['swing'], KEYS['swing'], tx + SWING[0] - 6, floor - SWING[2] + 1)
+    blit(G['swing'], KEYS['swing'], tx + SWING[0] - 7, floor - SWING[2] + 1)
     blit(G['bell'], KEYS['bell'], tx + BELL[0] - 3, floor - BELL[2] + 3)
     blit(G['seedDish'], KEYS['seedDish'], tx - 75 - 8, floor)
     blit(G['waterDish'], KEYS['waterDish'], tx - 51 - 8, floor)
