@@ -14,6 +14,11 @@ if printf '%s\n' "$added" | grep -nE '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|sk
   echo "Remove it from the staged changes (git diff --cached) and commit again." >&2
   exit 1
 fi
+# Debug mode is for local runs only (LC_DEBUG=1): never commit code that switches it on by default.
+if git diff --cached --no-color -U0 -- Sources | grep '^+' | grep -v '^+++' | grep -nE '(let|var) debug *= *true|setenv\("LC_|environment\["LC_DEBUG"\] *== *nil' >/dev/null; then
+  echo "security review: BLOCKED — this would turn debug mode on by default. Debug is local-only: run with LC_DEBUG=1 instead." >&2
+  exit 1
+fi
 bad=$(git diff --cached --name-only --diff-filter=AM | grep -E '(^|/)(\.env[^/]*|state[^/]*\.json|[^/]*\.(p12|pem|key|mobileprovision))$|(^|/)\.DS_Store$|^(\.build|tools/art/build)/')
 if [ -n "$bad" ]; then
   echo "security review: BLOCKED — these files should not be committed:" >&2
