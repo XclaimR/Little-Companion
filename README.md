@@ -18,7 +18,8 @@ It lives on the desktop layer, under your windows. It never steals focus, never 
 
 ## Watch the film
 
-https://github.com/user-attachments/assets/ea401cf8-5b84-4d99-8e57-911f039d2d7b
+https://github.com/user-attachments/assets/c53f2fed-4161-41c0-81c4-a2c223f9c7ca
+
 
 
 
