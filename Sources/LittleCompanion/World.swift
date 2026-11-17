@@ -103,6 +103,9 @@ import QuartzCore
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
             let steps: [(TimeInterval, Act, String?)] = [(1, .zoomies, nil), (12, .greet, nil), (20, .sit, nil), (28, .sit, nil), (36, .wander, nil), (44, .play, "ball"), (55, .carry, "rope")]
+            for (at, tumble) in [(6.0, true), (9.5, false)] {   // mid-zoomies: one tumble, one trip
+                Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.brain.debugFall(tumble: tumble) } }
+            }
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -136,6 +139,12 @@ import QuartzCore
     func test(_ act: Act, _ target: String? = nil) {
         brain.debugStart(act, target: target, env: environment())
         render()
+    }
+
+    /// Debug menu: get it running, then trip it up.
+    func testFall(tumble: Bool) {
+        test(.zoomies)
+        Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.brain.debugFall(tumble: tumble) } }
     }
 
     func environment() -> Environment {
@@ -204,6 +213,14 @@ import QuartzCore
 
     /// Which of Ollie's six frames shows each animation.
     func spriteFrame(_ p: Pose, time t: CFTimeInterval) -> DogSprite.Frame {
+        switch p.fall {
+        case "trip": return .trip
+        case "roll": return .tumbleRoll
+        case "sprawl": return .tumbleSprawl
+        case "up": return .jumpCrouch
+        case "sheepish": return .look   // glances back at where it fell, as if nothing happened
+        default: break
+        }
         if p.crouch { return .jumpCrouch }
         if let j = p.jump { return j < 0.5 ? .jumpUp : .jumpDown }   // thrusting off, then reaching for the floor
         switch p.anim {
@@ -257,7 +274,7 @@ import QuartzCore
         CATransaction.setDisableActions(true)
         if dogLayer.isHidden != p.hidden { dogLayer.isHidden = p.hidden; emoteLayer.isHidden = p.hidden }
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
-        let tilt = p.jump.map { CGFloat((0.5 - $0) * 0.55 * p.facing) } ?? 0   // nose up rising, nose down falling
+        let tilt = p.fall == "trip" ? CGFloat(-0.3 * p.facing) : p.jump.map { CGFloat((0.5 - $0) * 0.55 * p.facing) } ?? 0   // nose up rising, nose down falling or tripping
         if tilt != dogTilt {
             dogTilt = tilt
             let c = CGPoint(x: dogLayer.bounds.midX, y: dogLayer.bounds.midY)   // about the middle, not the anchor corner
@@ -400,7 +417,7 @@ import QuartzCore
         debugLayer.string = """
          \(a.act.rawValue)\(a.target.map { " → " + $0 } ?? "")\(a.destX != nil ? " (walking)" : String(format: " %.0fs left", a.remaining))
          needs  hunger \(f(n.hunger)) thirst \(f(n.thirst)) tired \(f(n.tiredness)) bored \(f(n.boredom))
-         traits play \(f(p.playfulness)) lazy \(f(p.laziness)) affect \(f(p.affection))
+         traits play \(f(p.playfulness)) lazy \(f(p.laziness)) affect \(f(p.affection)) clumsy \(f(p.clumsy))
                 indep \(f(p.independence)) curious \(f(p.curiosity)) energy \(f(p.energy))
          prefs  \(prefs)
          last decision:

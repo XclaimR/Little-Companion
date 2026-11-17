@@ -157,7 +157,8 @@ def compose(breed, pose):
             for x in range(int(hx + 8), int(hx + 12)): put(x, 31, 'pawF')   # one paw kicking up
         zones['pawF'] = ('leg', hx - 3, 9, False)
         A.update(cx=cx, cy=cy, L=L + 1, ry=bry, chx=cx + L - 1, belly=None)
-    else:  # bow: rear up, chest down, front legs flat forward, tail high
+    else:  # bow: rear up, chest down, front legs flat forward, tail high (trip: the same but the front legs buckle under and the nose hits the floor)
+        trip = pose == 'trip'
         cx = 19
         A['tail'] = (cx - 9, 12)
         leg('farback', cx - 6, 19, FLOOR - 2, w=3, far=True)
@@ -166,13 +167,14 @@ def compose(breed, pose):
         ell('chest', cx + 6, 24, 6.5, ry - 1)
         poly('torso', [(cx - 8, 13), (cx + 2, 15), (cx + 10, 22), (cx + 6, 29), (cx - 6, 23)], (cx, 20, 9, 7))
         leg('legBN', cx - 10, 20, FLOOR - 2, paw=-1)
+        fx0, fx1 = (cx + 1, cx + 9) if trip else (cx + 6, cx + 18)   # tripping: paws folded back under the chest
         for y in range(29, 31):
-            for x in range(int(cx + 8), int(cx + 19)): put(x, y, 'farpaw', 'd')
+            for x in range(int(fx0 + 2), int(fx1 + 1)): put(x, y, 'farpaw', 'd')
         for y in range(31, FLOOR + 1):
-            for x in range(int(cx + 6), int(cx + 18)): put(x, y, 'pawF')
-        zones['pawF'] = ('leg', cx + 6, 12, False)
-        zones['farpaw'] = ('leg', cx + 8, 11, True)
-        hx, hy = cx + 15, 21.5
+            for x in range(int(fx0), int(fx1)): put(x, y, 'pawF')
+        zones['pawF'] = ('leg', fx0, 12, False)
+        zones['farpaw'] = ('leg', fx0 + 2, 11, True)
+        hx, hy = (cx + 14, 26.5) if trip else (cx + 15, 21.5)
         A.update(cx=cx - 3, cy=18, L=8, ry=ry - .5, chx=cx + 6, belly=None)
 
     # head, muzzle, ears

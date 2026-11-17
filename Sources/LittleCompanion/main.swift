@@ -20,6 +20,7 @@ app.run()
             for (title, sel) in [("Test: play with the ball", #selector(testBall)), ("Test: shake the plush", #selector(testPlush)),
                                  ("Test: go to the kennel", #selector(testKennel)), ("Test: zoomies", #selector(testZoomies)),
                                  ("Test: follow the cursor", #selector(testFollow)), ("Test: sit", #selector(testSit)),
+                                 ("Test: trip", #selector(testTrip)), ("Test: tumble", #selector(testTumble)),
                                  ("Test: busy Mac on/off", #selector(testBusy))] {
                 menu.addItem(withTitle: title, action: sel, keyEquivalent: "").target = self
             }
@@ -40,5 +41,7 @@ app.run()
     @objc func testZoomies() { world?.test(.zoomies) }
     @objc func testFollow() { world?.test(.follow) }
     @objc func testSit() { world?.test(.sit) }
+    @objc func testTrip() { world?.testFall(tumble: false) }
+    @objc func testTumble() { world?.testFall(tumble: true) }
     @objc func testBusy() { world?.forceBusy.toggle() }
 }

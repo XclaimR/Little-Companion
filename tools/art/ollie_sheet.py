@@ -30,6 +30,7 @@ def wag(p, w):
     finally: hd2.WAG = 0
 frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB', 'look', 'bow') for w in (-1, 1)]   # 55-70: tail wag A/B for each awake pose
 frames += [frame(p) for p in ('crouch', 'runJU', 'runJD')]   # 71-73: jump crouch, take-off, coming down
+frames += [frame('trip'), sleepers.belly(awake=True), sleepers.side(awake=True)]   # 74-76: trip, tumble roll, sprawled after a tumble
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):

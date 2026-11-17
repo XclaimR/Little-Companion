@@ -16,11 +16,14 @@ public struct SplitMix: RandomNumberGenerator, Codable, Sendable, Equatable {
 /// Hidden traits, 0...1, rolled at adoption.
 public struct Personality: Codable, Sendable, Equatable {
     public var playfulness, laziness, affection, independence, curiosity, energy: Double
+    public var clumsiness: Double?          // older saves have none: a beagle is a little clumsy by default
+    public var clumsy: Double { clumsiness ?? 0.35 }
 
     public static func random(_ rng: inout SplitMix) -> Personality {
         var t = [Double]()
         for _ in 0..<6 { t.append(Double.random(in: 0.1...0.95, using: &rng)) }
-        return Personality(playfulness: t[0], laziness: t[1], affection: t[2], independence: t[3], curiosity: t[4], energy: t[5])
+        return Personality(playfulness: t[0], laziness: t[1], affection: t[2], independence: t[3], curiosity: t[4], energy: t[5],
+                           clumsiness: Double.random(in: 0.05...0.95, using: &rng))
     }
 }
 
@@ -130,6 +133,9 @@ public struct DogState: Codable, Sendable, Equatable {
     public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
     public var tossUntil: Double?       // tossing the toy it's holding up in the air
     public var wagUntil: Double?        // tail wagging until then
+    public var fallAt: Double?          // tripped (or went head over heels) at this time
+    public var fallKind: String?        // "trip": stumbles and carries on; "tumble": rolls over, lies there a moment, gets up sheepish
+    public var fallSpeed: Double?       // how fast it was going, for the slide
     public var pendingCarry: String?    // pick this toy up and trot off with it next
 }
 
@@ -170,4 +176,5 @@ public struct Pose: Sendable, Equatable {
     public var holding: String? = nil       // toy art in its mouth: "ball", "tennis", "plush" or "rope"
     public var toss = false                 // flinging the held toy up
     public var wag = false                  // tail wagging
+    public var fall: String? = nil          // "trip", "roll", "sprawl", "up", "sheepish": where it is in a stumble
 }

@@ -36,13 +36,17 @@ class Canvas:
             for x in range(W):
                 if self.g[y][x] and self.g[y][x] in 'bsld' and self.sh[y][x] in only and test(x + .5, y + .5):
                     self.g[y][x] = dark if self.g[y][x] in 'sd' else light
-    def finish(self, eye):
+    def finish(self, eye, open=False):
         out = [r[:] for r in self.g]
         for y in range(H):
             for x in range(W):
                 if self.g[y][x] is None and any(0 <= x + dx < W and 0 <= y + dy < H and self.g[y + dy][x + dx] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                     out[y][x] = 'o'
-        for (x, y) in eye: out[y][x] = 'y'          # closed eye: a short lid line
+        if open:                                     # awake (mid-tumble): a round eye with a highlight
+            x, y = eye[1]
+            for (dx, dy, k) in ((0, -1, 'w'), (1, -1, 'y'), (0, 0, 'y'), (1, 0, 'y')): out[y + dy][x + dx] = k
+        else:
+            for (x, y) in eye: out[y][x] = 'y'      # closed eye: a short lid line
         return out
 
 def curl(twitch=False):
@@ -62,7 +66,7 @@ def curl(twitch=False):
     c.paint(lambda x, y: x > 22, 'c', 'k', ('tail',))                     # white tail tip under its nose
     return c.finish([(28, 28), (29, 29), (30, 29)])
 
-def side(twitch=False):
+def side(twitch=False, awake=False):
     c = Canvas()
     k = 2 if twitch else 0                          # dreaming: legs paddle, near pair forward, far pair back
     c.rect('backlegs', 10 + k, 31 - (1 if twitch else 0), 22 + k, 32 - (1 if twitch else 0)); c.rect('frontlegs', 27 + k, 31 - (1 if twitch else 0), 39 + k, 32 - (1 if twitch else 0))
@@ -79,9 +83,9 @@ def side(twitch=False):
     c.paint(lambda x, y: True, 'c', 'k', ('muzzle',))
     c.paint(lambda x, y: x > 35 + k or x < 13 - k, 'c', 'k', ('frontlegs', 'frontlegs2', 'backlegs', 'backlegs2'))   # white paws
     c.paint(lambda x, y: x < 3.5, 'c', 'k', ('tail',))
-    return c.finish([(37, 24), (38, 24), (39, 24)])
+    return c.finish([(37, 24), (38, 24), (39, 24)], awake)
 
-def belly(twitch=False):
+def belly(twitch=False, awake=False):
     c = Canvas()
     legs = ((13, 1, 20), (17, -1, 18), (26, 2, 19), (30, 0, 17)) if twitch else ((13, -1, 19), (17, 0, 19), (26, 1, 19), (30, 2, 19))
     for x0, lean, top in legs:                                       # paws in the air (kicking while dreaming)
@@ -100,7 +104,7 @@ def belly(twitch=False):
     c.paint(lambda x, y: y < 21 if not twitch else y < 20, 'c', 'k', tuple('leg%d' % x0 for x0 in (13, 17, 26, 30)))
     c.paint(lambda x, y: True, 'c', 'k', ('muzzle',))
     c.paint(lambda x, y: x < 4, 'c', 'k', ('tail',))
-    return c.finish([(37, 29), (38, 29), (39, 29)])
+    return c.finish([(37, 29), (38, 29), (39, 29)], awake)
 
 POSITIONS = {'curl': curl, 'side': side, 'belly': belly,
              'curlT': lambda: curl(True), 'sideT': lambda: side(True), 'bellyT': lambda: belly(True)}

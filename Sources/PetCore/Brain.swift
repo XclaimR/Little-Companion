@@ -45,6 +45,17 @@ public struct Brain: Sendable {
             let watching = s.attention != nil || s.activity.front == true
             if rand(0...1) < dt * (watching ? 0.3 : 0.03) * (0.3 + s.personality.affection) * mood * mood { s.wagUntil = s.time + rand(1.2...3.5) }
         }
+        if let at = s.fallAt {   // mid-stumble
+            let t = s.time - at
+            if t >= (s.fallKind == "tumble" ? Brain.tumbleLen : Brain.tripLen) { s.fallAt = nil; s.fallKind = nil; s.fallSpeed = nil }
+            else if s.fallKind == "tumble" {   // everything waits until it's back on its feet; it skids a little first
+                if t < 0.45 { s.x = min(max(s.x + s.facing * (s.fallSpeed ?? 60) * (1 - t / 0.45) * dt, env.minX), env.maxX) }
+                return
+            }
+        } else if let fast = movingGait, s.jumpAt == nil, s.carrying == nil, s.activity.act != .kennel,
+                  rand(0...1) < dt * s.personality.clumsy * (fast ? 0.012 : 0.002) * (0.6 + s.needs.tiredness) {
+            fall(tumble: rand(0...1) < (fast ? 0.5 : 0.15))   // clumsy paws: likelier running and tired, and a tumble mostly at speed
+        }
 
         if s.time >= s.nextInterruptCheck {
             s.nextInterruptCheck = s.time + 3
@@ -70,7 +81,7 @@ public struct Brain: Sendable {
         }
         if let dest = a.destX {
             let dest = min(max(dest, env.minX), env.maxX)
-            let step = (a.running == true && a.act != .zoomies ? 130 : a.act.speed) * dt
+            let step = (a.running == true && a.act != .zoomies ? 130 : a.act.speed) * dt * (s.fallKind == "trip" ? 0.4 : 1)   // tripping: staggers on, slower
             let d = dest - s.x
             if abs(d) <= step {
                 s.x = dest
@@ -190,7 +201,11 @@ public struct Brain: Sendable {
             pose.back = !pose.front && a.back == true
         }
         if s.attention == "head" { pose.lookX = s.lastCursorX }
-        pose.wag = anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
+        if let at = s.fallAt {
+            let t = s.time - at
+            pose.fall = s.fallKind == "trip" ? "trip" : t < 0.15 ? "trip" : t < 0.45 ? "roll" : t < 1.3 ? "sprawl" : t < 1.5 ? "up" : "sheepish"
+        }
+        pose.wag = pose.fall == nil && anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
         return pose
     }
 
@@ -529,6 +544,23 @@ public struct Brain: Sendable {
         let n = s.needs
         return max(0, min(1, 1 - (0.3 * n.hunger + 0.3 * n.thirst + 0.25 * n.boredom + 0.15 * n.tiredness)))
     }
+
+    static let tripLen = 0.45, tumbleLen = 2.3
+
+    /// nil when standing still; otherwise whether it is going fast (running or zoomies) rather than walking.
+    var movingGait: Bool? {
+        let a = s.activity
+        return a.destX == nil ? nil : a.act == .zoomies || a.running == true
+    }
+
+    mutating func fall(tumble: Bool) {
+        s.fallAt = s.time; s.fallKind = tumble ? "tumble" : "trip"
+        s.fallSpeed = s.activity.act == .zoomies ? 120 : s.activity.running == true ? 90 : 35
+        s.wagUntil = nil
+    }
+
+    /// Testing hook: trip (or tumble) right now.
+    public mutating func debugFall(tumble: Bool) { fall(tumble: tumble) }
 
     /// A jump layers on top of whatever it is doing; it never replaces the activity.
     mutating func jump(height: Double, length: Double) {
