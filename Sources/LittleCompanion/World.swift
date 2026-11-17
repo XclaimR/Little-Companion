@@ -102,7 +102,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .carry, "ball"), (14, .play, "plush"), (40, .play, "ball"), (62, .carry, "rope")]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .greet, nil), (9, .sit, nil), (17, .sit, nil), (25, .sit, nil), (33, .wander, nil), (41, .play, "ball"), (52, .carry, "rope")]
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -246,6 +246,8 @@ import QuartzCore
             }
             if p.toss { pose = 7 }
             index = DogSprite.toyFrame(toy, pose) ?? index
+        } else if p.wag, let w = frame.wagging(t) {
+            index = w.rawValue
         }
         let origin = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
         let rawEmote = p.emote ?? ""

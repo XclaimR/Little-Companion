@@ -4,7 +4,26 @@ import ImageIO
 
 /// Ollie's pixel-art frames, from Resources/ollie.png (six 48×36 frames, drawn in Pixelwright, facing right).
 enum DogSprite {
-    enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch }
+    enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch
+        case wagStandA = 55, wagStandB, wagSitA, wagSitB, wagFrontA, wagFrontB, wagBackA, wagBackB,   // after the 32 baked toy frames
+             wagWalkA1, wagWalkA2, wagWalkB1, wagWalkB2, wagLookA, wagLookB, wagBowA, wagBowB
+
+        /// The same pose with the tail wagging, flicking between two frames at `t`; nil if this pose has no wag art.
+        func wagging(_ t: Double) -> Frame? {
+            let base: Frame? = switch self {
+            case .stand: .wagStandA
+            case .sit: .wagSitA
+            case .sitFront: .wagFrontA
+            case .sitBack: .wagBackA
+            case .walkA: .wagWalkA1
+            case .walkB: .wagWalkB1
+            case .look: .wagLookA
+            case .bow: .wagBowA
+            default: nil
+            }
+            return base.flatMap { Frame(rawValue: $0.rawValue + Int(t * 7) % 2) }
+        }
+    }
     static let pixels = CGSize(width: 48, height: 36)
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }

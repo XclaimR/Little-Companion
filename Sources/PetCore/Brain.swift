@@ -37,6 +37,10 @@ public struct Brain: Sendable {
            rand(0...1) < dt * 0.12 * (0.3 + s.personality.playfulness) * mood {
             s.tossUntil = s.time + 0.7; jump(height: 10, length: 0.5)   // flings it up and catches it
         }
+        if s.activity.act != .sleep, s.time >= (s.wagUntil ?? 0) {   // tail wags: random bouts when happy, far likelier while it's looking at you
+            let watching = s.attention != nil || s.activity.front == true
+            if rand(0...1) < dt * (watching ? 0.3 : 0.03) * (0.3 + s.personality.affection) * mood * mood { s.wagUntil = s.time + rand(1.2...3.5) }
+        }
 
         if s.time >= s.nextInterruptCheck {
             s.nextInterruptCheck = s.time + 3
@@ -123,6 +127,7 @@ public struct Brain: Sendable {
         finish(); start(act, target: target, env)
         if act == .kennel, s.objects.contains(where: { $0.id == target }) { s.activity.running = true }
         if act == .sleep { s.needs.tiredness = max(s.needs.tiredness, 0.6); s.nextDream = s.time + 4 }   // dream soon, for testing
+        else { s.wagUntil = s.time + 6 }   // wag straight away, for testing
     }
 
     /// App relaunch: needs drift toward neutral (capped) and the dog wakes in its favourite sleeping spot.
@@ -178,6 +183,7 @@ public struct Brain: Sendable {
             pose.back = !pose.front && a.back == true
         }
         if s.attention == "head" { pose.lookX = s.lastCursorX }
+        pose.wag = anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
         return pose
     }
 

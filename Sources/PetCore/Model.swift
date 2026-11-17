@@ -129,6 +129,7 @@ public struct DogState: Codable, Sendable, Equatable {
     public var sleepPos: String?        // "flat", "curl", "side" or "belly"
     public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
     public var tossUntil: Double?       // tossing the toy it's holding up in the air
+    public var wagUntil: Double?        // tail wagging until then
     public var pendingCarry: String?    // pick this toy up and trot off with it next
 }
 
@@ -167,4 +168,5 @@ public struct Pose: Sendable, Equatable {
     public var inBed: String? = nil         // id of the bed it's lying in
     public var holding: String? = nil       // toy art in its mouth: "ball", "tennis", "plush" or "rope"
     public var toss = false                 // flinging the held toy up
+    public var wag = false                  // tail wagging
 }

@@ -24,6 +24,11 @@ def frame(p):
     return g
 poses = hd2.POSES + ['look', 'front', 'pawUp', 'shakeA', 'shakeB', 'back', 'sleepT', 'curl', 'side', 'belly', 'curlT', 'sideT', 'bellyT']
 frames = [frame(p) for p in poses] + toys.all_frames()   # + 4 toys x 8 poses, baked in
+def wag(p, w):
+    hd2.WAG = w
+    try: return front.front_sit(w) if p == 'front' else front.back_sit(w) if p == 'back' else frame(p)
+    finally: hd2.WAG = 0
+frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB', 'look', 'bow') for w in (-1, 1)]   # 55-70: tail wag A/B for each awake pose
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):

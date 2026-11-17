@@ -1,7 +1,7 @@
 # Ollie sitting, facing the viewer (48x36). Shapes + zone shading lit from the top-left + outline.
 import json, sys
 W, H, FLOOR = 48, 36, 33
-def front_sit():
+def front_sit(wag=0):
     g = [[None]*W for _ in range(H)]; sh = [[None]*W for _ in range(H)]; zones = {}
     def ell(sid, cx, cy, rx, ry, k='b'):
         zones.setdefault(sid, (cx, cy, rx, ry))
@@ -13,7 +13,7 @@ def front_sit():
         for y in range(y0, y1+1):
             for x in range(x0, x1+1): g[y][x] = k; sh[y][x] = sid
     # back to front
-    ell('tail', 35.5, 21.5, 1.6, 4.2)                       # tail tip peeking up behind the right hip
+    ell('tail', 35.5 + 2 * wag, 21.5 - abs(wag), 1.6, 4.2)                       # tail tip peeking up behind the right hip
     ell('hipL', 16.5, 29.5, 6, 4.6); ell('hipR', 31.5, 29.5, 6, 4.6)
     ell('body', 24, 24.5, 7.5, 8.5)
     rect('legL', 19, 25, 22, 31); rect('legR', 25, 25, 28, 31)
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     hd2.png(o + '/front.png', [[('pudding', hd2.compose('pudding', 'sit')), ('pudding', front_sit())]], scale=8)
     print('ok')
 
-def back_sit():
+def back_sit(wag=0):
     """Ollie sitting with its back to the viewer: no face, saddle and collar from behind, tail curled up to one side."""
     g = [[None]*W for _ in range(H)]; sh = [[None]*W for _ in range(H)]; zones = {}
     def ell(sid, cx, cy, rx, ry, k='b'):
@@ -84,6 +84,7 @@ def back_sit():
     ell('earL', 16, 13, 3, 6.2, 'a'); ell('earR', 32, 13, 3, 6.2, 'a')
     # tail: up from the base, curling to the right, white tip
     for (x, y) in [(31,30),(32,30),(32,29),(33,29),(33,28),(34,28),(34,27),(35,27),(35,26),(36,26),(35,25),(36,25),(36,24),(37,24),(36,23),(37,23),(37,22),(38,22),(37,21),(38,21),(37,20),(38,20)]:
+        x += round(wag * max(0, 27 - y) / 7 * 2.5)   # wag: the upper tail swings side to side
         g[y][x] = 'b'; sh[y][x] = 'tail'   # curls up past the right hip, thick enough to read
     zones['tail'] = (27, 26, 3, 5)
     for y in range(H):

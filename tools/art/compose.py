@@ -222,8 +222,9 @@ def compose(breed, pose):
     LAST_ANCHORS = dict(A, mrx=P['muz'][0])   # mouth/head positions, for baking toys into frames
     return g
 
+WAG = 0   # tail wag: -1 tip back/down, +1 tip forward/up (set by the sheet builder)
 def draw_tail(P, at, ell, poly, pose):
-    tx, ty = at
+    tx, ty = at; w = WAG
     t = P['tail']
     if t == 'curl':
         if pose in ('sleep', 'sleepT'): ell('tail', tx, ty - 1, 4.5, 3.2)
@@ -231,13 +232,14 @@ def draw_tail(P, at, ell, poly, pose):
             ell('tail', tx - 1, ty - 4, 5, 4.6)
             poly('tailbase', [(tx + 1, ty - 2), (tx + 5, ty - 1), (tx + 5, ty + 2), (tx + 1, ty + 1)], (tx, ty, 4, 3))
     elif t in ('flag', 'thin', 'brush') and pose == 'sit':
-        poly('tail', [(tx + 3, 29), (tx - 6, 31.5), (tx - 7, 33.9), (tx + 3, 33.9)], (tx - 2, 31.5, 5, 2))
+        lift = (2 + 1.5 * w) if w else 0
+        poly('tail', [(tx + 3, 29), (tx - 6, 31.5 - lift), (tx - 7, 33.9 - lift), (tx + 3, 33.9)], (tx - 2, 31.5, 5, 2))   # wag: sweeps the floor
     elif t == 'flag' and pose in ('run', 'zoom'):
         if pose == 'zoom': poly('tail', [(tx + 2, ty + 2), (tx - 9, ty - 1), (tx - 9.5, ty + 1), (tx + 2, ty + 4)], (tx - 3, ty + 1, 5, 2))
         else: poly('tail', [(tx + 2, ty + 2), (tx - 3, ty - 4), (tx - 6, ty - 7), (tx - 4.5, ty - 8), (tx - 1, ty - 4.5), (tx + 3.5, ty)], (tx - 2, ty - 3, 4, 4))
     elif t == 'flag':
         if pose in ('sleep', 'sleepT'): poly('tail', [(tx, ty), (tx - 7, ty + 3), (tx - 7, ty + 5), (tx, ty + 3)], (tx - 3, ty + 2, 4, 2))
-        else: poly('tail', [(tx + 2, ty + 2), (tx - 1, ty - 2), (tx - 3, ty - 8), (tx - 1.5, ty - 9.5), (tx + .5, ty - 3), (tx + 3.5, ty)], (tx, ty - 4, 3, 5))
+        else: poly('tail', [(tx + 2, ty + 2), (tx - 1 + w, ty - 2), (tx - 3 + 3 * w, ty - 8), (tx - 1.5 + 3 * w, ty - 9.5), (tx + .5 + w, ty - 3), (tx + 3.5, ty)], (tx, ty - 4, 3, 5))
     elif t == 'plume':
         if pose in ('sleep', 'sleepT'): ell('tail', tx, ty, 5, 3)
         else: ell('tail', tx + 1, ty - 3, 5, 3.6); ell('tail', tx + 4.5, ty - 5.2, 3.6, 2.6)
