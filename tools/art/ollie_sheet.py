@@ -29,6 +29,7 @@ def wag(p, w):
     try: return front.front_sit(w) if p == 'front' else front.back_sit(w) if p == 'back' else frame(p)
     finally: hd2.WAG = 0
 frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB', 'look', 'bow') for w in (-1, 1)]   # 55-70: tail wag A/B for each awake pose
+frames += [frame(p) for p in ('crouch', 'runJU', 'runJD')]   # 71-73: jump crouch, take-off, coming down
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):

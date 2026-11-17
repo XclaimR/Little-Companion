@@ -14,7 +14,7 @@ import QuartzCore
     let screenW: CGFloat, screenH: CGFloat, floorY: CGFloat
     var brain: Brain
     var last = CACurrentMediaTime()
-    var spriteKey = "", dogOrigin = CGPoint(x: -1, y: -1), emoteText = ""
+    var spriteKey = "", dogOrigin = CGPoint(x: -1, y: -1), emoteText = "", dogTilt: CGFloat = 0
     let debug = ProcessInfo.processInfo.environment["LC_DEBUG"] != nil
     /// LC_LOG=1 prints every activity change, jump and cursor reaction (for watching behaviour in tests).
     let log = ProcessInfo.processInfo.environment["LC_LOG"] != nil
@@ -102,7 +102,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .greet, nil), (9, .sit, nil), (17, .sit, nil), (25, .sit, nil), (33, .wander, nil), (41, .play, "ball"), (52, .carry, "rope")]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .zoomies, nil), (12, .greet, nil), (20, .sit, nil), (28, .sit, nil), (36, .wander, nil), (44, .play, "ball"), (55, .carry, "rope")]
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -178,7 +178,7 @@ import QuartzCore
         case .sleep: 1.0
         default: 0.2 // brain at 5 Hz; nothing redraws unless something changed
         }
-        if brain.pose.jump != nil { interval = 1.0 / 30 }   // smooth arc
+        if brain.s.jumpAt != nil { interval = 1.0 / 30 }   // smooth arc
         if brain.pose.hidden { interval = 1.0 }             // inside the kennel: nothing to draw
         if brain.pose.twitch { interval = 1.0 / 8 }         // dreaming: paddling paws
         let t = Timer(timeInterval: interval, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
@@ -195,7 +195,7 @@ import QuartzCore
         if p.anim == .hop { lift = abs(sin(t * 7)) * 18 }
         if p.twitch && p.anim != .sleep { lift = 2 }
         if p.inBed != nil { lift += 3 * DogSprite.pointsPerPixel }   // sunk into the cushion, the rim covering its lower body
-        if let j = p.jump { lift += sin(j * .pi) * p.jumpHeight }
+        if let j = p.jump { lift += 4 * j * (1 - j) * p.jumpHeight }   // a true parabola, peak at the middle
         if p.anim == .run || p.anim == .zoom { lift += Int(p.x / 16) % 2 == 0 ? 0 : 2 }   // gallop bounce
         let s = DogSprite.size
         let footGap = DogSprite.footRows * DogSprite.pointsPerPixel
@@ -204,6 +204,8 @@ import QuartzCore
 
     /// Which of Ollie's six frames shows each animation.
     func spriteFrame(_ p: Pose, time t: CFTimeInterval) -> DogSprite.Frame {
+        if p.crouch { return .jumpCrouch }
+        if let j = p.jump { return j < 0.5 ? .jumpUp : .jumpDown }   // thrusting off, then reaching for the floor
         switch p.anim {
         case .walk: return Int(p.x / 10) % 2 == 0 ? .walkA : .walkB
         case .run: return Int(p.x / 16) % 2 == 0 ? .runA : .runB
@@ -222,7 +224,6 @@ import QuartzCore
             return Int(t * 3) % 2 == 0 ? .pawUp : .stand                               // batting at the ball
         case .stretch, .headDown: return .bow   // shortcut: no head-down frame yet; the bow lowers the head
         case .stand, .hop:
-            if p.jump != nil { return .runB }   // legs tucked under while airborne
             if p.attention == "head", let lx = p.lookX, (lx - p.x) * p.facing < 0 { return .look }   // glancing back at the cursor
             return .stand
         }
@@ -238,8 +239,8 @@ import QuartzCore
             var pose: Int = switch frame {
             case .walkA: 0
             case .walkB: 1
-            case .runA, .zoomA: 2
-            case .runB, .zoomB: 3
+            case .runA, .zoomA, .jumpUp: 2
+            case .runB, .zoomB, .jumpDown: 3
             case .shakeA: 5
             case .shakeB: 6
             default: 4
@@ -256,6 +257,12 @@ import QuartzCore
         CATransaction.setDisableActions(true)
         if dogLayer.isHidden != p.hidden { dogLayer.isHidden = p.hidden; emoteLayer.isHidden = p.hidden }
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
+        let tilt = p.jump.map { CGFloat((0.5 - $0) * 0.55 * p.facing) } ?? 0   // nose up rising, nose down falling
+        if tilt != dogTilt {
+            dogTilt = tilt
+            let c = CGPoint(x: dogLayer.bounds.midX, y: dogLayer.bounds.midY)   // about the middle, not the anchor corner
+            dogLayer.setAffineTransform(CGAffineTransform(translationX: c.x, y: c.y).rotated(by: tilt).translatedBy(x: -c.x, y: -c.y))
+        }
         let kennelX = brain.s.objects.first { $0.kind == .kennel }.map { CGFloat($0.x) }
         let shadow = p.inKennel && kennelX.map { CGFloat(p.x) < $0 + 13 } == true   // fully past the open end: only its shadow shows
         let key = "\(index)\(p.facing)" + (shadow ? "s" : "")

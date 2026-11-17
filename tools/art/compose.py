@@ -41,25 +41,25 @@ def compose(breed, pose):
         for y in range(y1 + 1, FLOOR + 1):        # paw, pointing forward
             for x in range(int(x0) - (1 if paw < 0 else 0), int(x0) + w + (1 if paw > 0 else 0)): put(x, y, sid)
 
-    def sleg(sid, xtop, ytop, xbot, w=4, far=False, paw=1):
-        # a leg as a slanted strip from (xtop, ytop) to (xbot, FLOOR-1), with a paw on the last rows
+    def sleg(sid, xtop, ytop, xbot, w=4, far=False, paw=1, ybot=FLOOR - 1):
+        # a leg as a slanted strip from (xtop, ytop) to (xbot, ybot), with a paw on the row below
         zones[sid] = ('leg', xtop, w, far)
-        y0, y1 = int(ytop), FLOOR - 1
+        y0, y1 = int(ytop), ybot
         for y in range(y0, y1 + 1):
             t = (y - y0) / max(1, y1 - y0)
             xs = xtop + (xbot - xtop) * t
             for x in range(int(round(xs)), int(round(xs)) + w): put(x, y, sid)
         xb = int(round(xbot))
-        for x in range(xb - (1 if paw < 0 else 0), xb + w + (1 if paw > 0 else 0)): put(x, FLOOR, sid)
+        for x in range(xb - (1 if paw < 0 else 0), xb + w + (1 if paw > 0 else 0)): put(x, y1 + 1, sid)
     L, ry, legH = P['L'], P['ry'], P['leg']
     hrx, hry = P['head']; mrx, mry = P['muz']
     walk = {'walkA': 1, 'walkB': -1}.get(pose, 0)
     marks = P['marks']
     A = {}   # anchors used by markings
 
-    if pose in ('stand', 'walkA', 'walkB', 'pawUp', 'shakeA', 'shakeB'):
+    if pose in ('stand', 'walkA', 'walkB', 'pawUp', 'shakeA', 'shakeB', 'crouch'):
         cx = 22 - (L - 13) * 0.7
-        cy = FLOOR - legH - ry + 1.5
+        cy = FLOOR - legH - ry + 1.5 + (3 if pose == 'crouch' else 0)   # crouch: gathering itself to spring / soaking up a landing
         if pose == 'walkB': cy -= 0.6
         top = cy + ry - 1.5
         bx, fx = cx - L + 1, cx + L - 5
@@ -70,7 +70,7 @@ def compose(breed, pose):
         ell('body', cx, cy, L, ry)
         ell('haunch', cx - L + 4.5, cy + 2, 5, ry * 0.85)
         hx, hy = cx + L + 1, cy - ry - 3
-        hy += {'pawUp': 3.5, 'shakeA': -2, 'shakeB': 2.5}.get(pose, 0)   # head down at the ball / flicking a toy up / down
+        hy += {'pawUp': 3.5, 'shakeA': -2, 'shakeB': 2.5, 'crouch': 1}.get(pose, 0)   # head down at the ball / flicking a toy up / down
         hx += {'pawUp': .5, 'shakeB': .5}.get(pose, 0)
         chx = cx + L - 0.5
         poly('neck', [(hx - 7, hy + .5), (hx + 1, hy - 1.5), (chx + 4.5, cy + 1.5), (chx - 5.5, cy + .5)], (chx, cy - 3, 6, 7))
@@ -84,6 +84,26 @@ def compose(breed, pose):
             for x in range(int(fx + 4), int(fx + 9)): put(x, FLOOR - 4, 'legFN'); put(x, FLOOR - 5, 'legFN')
         else:
             leg('legFN', fx - 2 * walk, top - .5, FLOOR - 2, paw=1)
+        A.update(cx=cx, cy=cy, L=L, ry=ry, chx=chx, belly=(cx - L + 6, cx + L - 4, cy + ry - 1.6))
+    elif pose in ('runJU', 'runJD'):   # airborne: JU takes off (hind legs thrust back, fronts folded), JD comes down (fronts reach for the floor, hinds tucked)
+        up = pose == 'runJU'
+        cx = 22 - (L - 13) * 0.7
+        cy = FLOOR - legH - ry + 1.5
+        top = cy + ry - 1.5
+        bx, fx = cx - L + 3, cx + L - 6
+        hind, front = ((-7, FLOOR - 1), (3, FLOOR - 5)) if up else ((3, FLOOR - 5), (6, FLOOR - 1))
+        sleg('farback', bx + 3, top + 1, bx + 3 + hind[0] + 1, w=3, far=True, ybot=hind[1] - 1)
+        sleg('farfront', fx + 3, top, fx + 3 + front[0] - 1, w=3, far=True, ybot=front[1] - 1)
+        A['tail'] = (cx - L + 2.5, cy - ry * 0.75)
+        draw_tail(P, A['tail'], ell, poly, 'run')
+        ell('body', cx, cy, L + .5, ry - .3)
+        ell('haunch', cx - L + 4.5, cy + 1.5, 5, ry * 0.85)
+        hx, hy = cx + L + 1.5, cy - ry - (2.5 if up else 1)
+        chx = cx + L - 0.5
+        poly('neck', [(hx - 7, hy + .5), (hx + 1, hy - 1.5), (chx + 4.5, cy + 1.5), (chx - 5.5, cy + .5)], (chx, cy - 3, 6, 7))
+        ell('chest', chx, cy, 4.6, ry - .3)
+        sleg('legBN', bx, top, bx + hind[0], paw=-1, ybot=hind[1])
+        sleg('legFN', fx, top - .5, fx + front[0], paw=1, ybot=front[1])
         A.update(cx=cx, cy=cy, L=L, ry=ry, chx=chx, belly=(cx - L + 6, cx + L - 4, cy + ry - 1.6))
     elif pose in ('runA', 'runB', 'zoomA', 'zoomB'):
         zoom = pose.startswith('zoom')

@@ -42,3 +42,24 @@ import Testing
     #expect(watching > 30)
     #expect(watching > alone * 3)
 }
+
+/// A standing jump crouches, flies forward along an arc that peaks mid-way, then lands in a crouch.
+@Test func standingJumpArcsForward() {
+    var b = Brain(seed: 3)
+    b.s.objects = defaultObjects(width: 1400); b.s.x = 500; b.s.facing = 1
+    let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil)
+    b.debugStart(.sit, target: nil, env: env)
+    b.jump(height: 20, length: 0.5)
+    var stages: [String] = [], peak = 0.0
+    let x0 = b.s.x
+    for _ in 0..<12 {
+        b.update(dt: 0.07, env: env)
+        let p = b.pose
+        let st = p.crouch ? "crouch" : p.jump != nil ? "air" : "ground"
+        if stages.last != st { stages.append(st) }
+        if let j = p.jump { peak = max(peak, 4 * j * (1 - j)) }
+    }
+    #expect(stages == ["crouch", "air", "crouch", "ground"])
+    #expect(b.s.x - x0 > 12)   // travelled forward, not just up and down
+    #expect(peak > 0.9)
+}

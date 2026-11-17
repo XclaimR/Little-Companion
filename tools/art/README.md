@@ -4,7 +4,7 @@ Pixel art for Little Companion is composed here and then mirrored into the Pixel
 
 - `compose.py` — parametric 48×36 side-view dog composer (breeds × poses: stand, walk, sit, sleep, bow, run, zoomies, paw-up, shake).
 - `front.py` — front-facing and back-facing sits.
-- `ollie_sheet.py` — builds Ollie's 71-frame sheet (poses, sleep positions, 4 toys × 8, tail wags): `python3 ollie_sheet.py tools/art` writes `ollie11.png` (copy to `Sources/LittleCompanion/Resources/ollie.png`).
+- `ollie_sheet.py` — builds Ollie's 74-frame sheet (poses, sleep positions, 4 toys × 8, tail wags, jump): `python3 ollie_sheet.py tools/art` writes `ollie11.png` (copy to `Sources/LittleCompanion/Resources/ollie.png`).
 - `palette.json` — token → hex for every colour in the Pixelwright palette.
 - `objects_grids.json` — the home objects as pixel grids (source of `Resources/objects.png`).
 - `sleepers.py` — the curled, side and belly-up sleeping positions and their dream twitches.

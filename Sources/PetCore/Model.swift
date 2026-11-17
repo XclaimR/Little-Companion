@@ -157,6 +157,7 @@ public struct Pose: Sendable, Equatable {
     public var twitch: Bool
     public var jump: Double? = nil          // 0...1 through a jump, nil when on the ground
     public var jumpHeight: Double = 0       // points at the top of the arc
+    public var crouch = false               // crouched just before a jump or just after landing
     public var attention: String? = nil     // "head", "body", "follow"
     public var lookX: Double? = nil         // where it is looking (cursor x) while attention is "head"
     public var hidden: Bool = false         // inside the kennel: draw nothing

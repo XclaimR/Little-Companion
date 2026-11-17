@@ -30,7 +30,11 @@ public struct Brain: Sendable {
         decayPreferences(dt)
         s.x = min(max(s.x, env.minX), env.maxX)
         if s.emote != nil && s.time > s.emoteUntil { s.emote = nil }
-        if let at = s.jumpAt, s.time - at >= (s.jumpLen ?? 0) { s.jumpAt = nil }
+        if let at = s.jumpAt, s.time - at >= (s.jumpLen ?? 0) + Brain.jumpLand { s.jumpAt = nil }
+        if let at = s.jumpAt, let len = s.jumpLen, len > 0, s.time >= at, s.time < at + len, s.activity.destX == nil {
+            // a standing jump still carries it forward, about as far as it rises, so it flies an arc rather than bobbing up and down
+            s.x = min(max(s.x + s.facing * 0.9 * (s.jumpHeight ?? 0) / len * dt, env.minX), env.maxX)
+        }
         updateAttention(dt, env: env)
         maybeJump(dt, circ: circ)
         if s.carrying != nil, s.jumpAt == nil, s.activity.act == .carry || s.activity.act == .play,
@@ -164,7 +168,10 @@ public struct Brain: Sendable {
         }
         let emote = anim == .sleep ? "z" : s.emote
         var pose = Pose(x: s.x, facing: s.facing, anim: anim, carrying: s.carrying, emote: emote, twitch: s.time < s.twitchUntil)
-        if let at = s.jumpAt, let len = s.jumpLen, len > 0 { pose.jump = min(1, max(0, (s.time - at) / len)); pose.jumpHeight = s.jumpHeight ?? 0 }
+        if let at = s.jumpAt, let len = s.jumpLen, len > 0 {
+            if s.time < at || s.time > at + len { pose.crouch = true }   // winding up, or soaking up the landing
+            else { pose.jump = (s.time - at) / len; pose.jumpHeight = s.jumpHeight ?? 0 }
+        }
         pose.attention = s.attention
         if let c = s.carrying, let o = s.objects.first(where: { $0.id == c }), o.kind.isToy {
             pose.holding = o.id == "tennis" ? "tennis" : o.kind.rawValue
@@ -526,8 +533,10 @@ public struct Brain: Sendable {
     /// A jump layers on top of whatever it is doing; it never replaces the activity.
     mutating func jump(height: Double, length: Double) {
         guard s.jumpAt == nil else { return }
-        s.jumpAt = s.time; s.jumpLen = length; s.jumpHeight = height
+        // Standing jumps gather into a crouch first; on the move it springs straight off its stride.
+        s.jumpAt = s.time + (s.activity.destX == nil ? Brain.jumpCrouch : 0); s.jumpLen = length; s.jumpHeight = height
     }
+    static let jumpCrouch = 0.14, jumpLand = 0.12
 
     /// Shock: a quick startled jump with a "!", waking it if asleep.
     public mutating func startle(env: Environment, strength: Double = 1) {
