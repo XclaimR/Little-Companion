@@ -16,6 +16,12 @@ Little Companion isn't a game and it isn't a to-do list with a mascot. There's n
 
 It lives on the desktop layer, under your windows. It never steals focus, never blocks a click and makes no sound. You can forget it's there, and that's the point.
 
+## Watch the film
+
+[![A Little Company: one workday with Ollie. Play the 46-second film](docs/film-poster.jpg)](docs/little-companion.mp4)
+
+*A Little Company: one workday with Ollie, 46 seconds with sound. Click the picture to play it.*
+
 ## Meet the dogs
 
 Each dog has its own hidden personality: playful or lazy, affectionate or independent, curious, energetic, a bit clumsy. You find it out by watching. Pick one from the 🐾 menu. You can switch whenever you like, and each dog remembers its own life.
