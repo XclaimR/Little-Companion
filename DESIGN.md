@@ -42,27 +42,47 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 - Utility scoring from needs, personality, preferences, environment, recent history, randomness → weighted random pick.
 - Durations, cooldowns, interruption.
 - Personality: random hidden traits + small innate likes at adoption; user picks only the name.
-- Learning: preferences grow through experience and decay back toward innate likes; novelty boost for new objects; capped interaction log as memory.
+- Learning: each object starts at a faint hint (0.3×) of the dog's hidden innate taste; experiences pull the learned preference toward the true taste (+ noise, + mood); disuse fades it back toward the faint hint over ~2 weeks. Novelty boost for new objects (decays over ~3 h); capped 200-entry interaction log as memory.
+
+### As built (`Sources/PetCore`)
+- `Model.swift` — state types (`DogState` is the whole persisted life), `SplitMix` seeded RNG.
+- `Brain.swift` — scoring (`candidates`), weighted pick (`decide`, 3% "got distracted" random pick), `start`/`arrive`/`perform`/`finish`, needs over time, preference decay, interruptions, `poke`, `add` (new object), `resume(afterOffline:)`, `pose` for the renderer.
+- Acts: idle, sit, lookAround, wander, sniff, sleep, stretch, groom, eat, drink, play, carry, zoomies, greet, react. Preference factor `exp(1.3·pref)`: a favourite is ~3.7× likelier, never certain.
+- Typical simulated day (8 dogs): sleep 47–54%, sit ~15%, idle ~9%, play 5–9%, wander 4–8%, carry 1–7%; nights mostly asleep with brief wakes. New tennis ball at 11:00 ends the day anywhere from −0.38 (went off it) to +0.50 (carries it everywhere).
+- App ticks: 20 Hz while moving, 5 Hz while still, 1 Hz asleep; timer gaps are simulated in ≤1 s steps (never dropped); gaps > 8 h use `resume`.
 - Circadian rhythm from local clock; user idle ≥10 min → longer naps; sometimes wanders to cursor on return.
 - App closed: needs drift toward neutral; dog wakes in its favourite spot on launch.
 - Visuals: body language first; trial emotes (zzz, !, ?, heart).
 - 32px pixel-art dog at 2× (~64pt). Coloured-shape placeholders until behaviour works.
+- **Pixel designs:** [Little Companion — Dog Pixel Designs](https://claude.ai/artifact/MVW6fASYvK54PvE31tyUqf) (design canvas, private). Five candidates on the app's 32×24 grid — Biscuit (shiba-ish), Pudding (beagle-ish), Mochi (fluffy white), Bean (dachshund), Pepper (collie-ish tuxedo) — each in stand, walk ×2, sit, sleep and play bow, plus a real-size check on light and dark wallpaper. Sprites come from one parametric generator (body/leg/head size, ear, tail, markings, palette) that can be ported to Swift to produce the app's sprites.
+
+### Behaviours added in testing with Ollie (beagle)
+- **Gaits:** walk 42 pt/s; run 130 pt/s (greeting you, chasing a far cursor or a distant toy, sometimes when wandering happy); zoomies 170 pt/s. Each has its own frames.
+- **Jumps** layer on top of any activity: hops while playing/zoomies; rare spontaneous jumps (playful × energetic × good mood × rested, rare at night, more just after you return); a startled jump with "!" when woken by a click or when something lands next to it; a pounce at the end of a cursor chase or on a rolling ball.
+- **Cursor attention:** noticing a moving cursor near its floor, the dog chooses: *head* (glance; look-back frame when the cursor is behind), *body* (turns to face it) or *follow* (walks/runs after it). Lazy → glance, curious → turn, playful/affectionate → follow; tired or unhappy dogs mostly ignore it.
+- **Play by toy:** balls roll away every few seconds and get chased, pounced on and batted (paw-up frame); plush and rope are grabbed and shaken (shake-up/down frames, toy held in the mouth), then dropped where play ended.
+- **Sitting facing you** (front frame): sometimes when sitting (more if affectionate), when greeting you, and when it notices the cursor while sitting.
+- **Kennel:** a den on the desktop floor. Independent/lazy/tired dogs pop in for 3–15 min now and then (≈10–15% of the day). When the Mac is busy (1-min load average > 75% of cores) any awake dog runs inside within a few seconds and stays until things calm down; nothing is drawn while it's inside.
+- Ollie's art: 15 frames in `Resources/ollie.png`, objects in `Resources/objects.png` + `objects.json` — both mirrored in the Pixelwright project "Little Companion".
 
 ## Tooling & persistence
-- Headless runner: fast-forward 24 simulated hours, assert invariants (never stuck, needs in range, no action dominating), print behaviour histogram.
-- Dev-only debug overlay: scores and the reason for the chosen action.
-- Single versioned JSON in app data; debounced ~30 s + save on quit.
+- Headless runner (`simrun`): fast-forwards dogs through simulated workdays (~0.3 s per day), checks invariants (needs in range, on the floor, never stuck awake 20 min, no maxed need for an hour, sleep 30–80%, no awake act > 30%, ≥ 8 different acts), prints histogram, per-object preferences and an hourly timeline.
+- Tests (`swift test`): six seeded days hold invariants; same seed → same day; dogs differ (favourite toy, routine); enjoyable toy becomes a favourite; state round-trips through JSON.
+- Dev-only debug overlay (`LC_DEBUG=1`): current act, needs, traits, preferences, last decision's top scores, window-top ledges.
+- Single versioned JSON at `~/Library/Application Support/LittleCompanion/state.json`; atomic write every 30 s + on quit. An unreadable file is moved aside (`state.unreadable-*.json`), never overwritten.
 - Personal use: unsigned builds, no updater.
 
 ## Running
 ```
-swift build -c release && .build/release/LittleCompanion
+swift build -c release && .build/release/LittleCompanion   # the app
+swift run -c release simrun 4 24 1                          # 4 dogs × 24 h, seeds 1–4
+swift test                                                  # engine tests
 ```
-Env: `LC_DEBUG=1` draws window-top ledges · `LC_BENCH=walk|top|top-still` benchmark modes (walk 60 s then sleep; `top` = above all windows; `still` = stationary asleep for click tests).
+Env: `LC_DEBUG=1` debug overlay, ledges and a **Test** section in the 🐾 menu · `LC_TOP=1` draw above all windows · `LC_SPEED=4` run life 4× faster · `LC_BUSY=1` pretend the Mac is busy · `LC_DEMO=1` scripted tour (ball, plush, sit, kennel, zoomies). Delete `state.json` to adopt a new dog.
 
 ## Roadmap
 1. ~~Spike~~ — done; Swift chosen (see results above).
-2. Behaviour engine + headless runner.
+2. ~~Behaviour engine + headless runner~~ — done. Objects sit on the desktop floor until step 3.
 3. House popup + drag-and-drop.
 4. Window/icon platforms, toy physics.
 5. Pixel art, emotes, tuning.

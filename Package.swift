@@ -5,6 +5,9 @@ let package = Package(
     name: "LittleCompanion",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "LittleCompanion", path: "Sources/LittleCompanion"),
+        .target(name: "PetCore"), // behaviour engine: no AppKit, deterministic given a seed
+        .executableTarget(name: "LittleCompanion", dependencies: ["PetCore"], resources: [.copy("Resources/ollie.png"), .copy("Resources/objects.png"), .copy("Resources/objects.json")]),
+        .executableTarget(name: "simrun", dependencies: ["PetCore"]),
+        .testTarget(name: "PetCoreTests", dependencies: ["PetCore"]),
     ]
 )
