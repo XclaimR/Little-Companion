@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory) // menu bar only, no Dock icon
@@ -35,12 +36,24 @@ app.run()
             }
             menu.addItem(.separator())
         }
+        if Bundle.main.bundleURL.pathExtension == "app" {   // only an installed app can open itself at login
+            let login = menu.addItem(withTitle: "Open at login", action: #selector(toggleLogin(_:)), keyEquivalent: "")
+            login.target = self
+            login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        }
         menu.addItem(withTitle: "Quit Little Companion", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
         statusItem = item
 
         world = World(screen: NSScreen.main!)
         refreshDogMenu()
+    }
+
+    @objc func toggleLogin(_ sender: NSMenuItem) {
+        do {
+            if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
+        } catch { NSLog("LittleCompanion: open at login failed: \(error)") }
+        sender.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
     @objc func pickDog(_ sender: NSMenuItem) {

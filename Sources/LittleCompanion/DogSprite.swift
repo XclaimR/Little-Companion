@@ -38,7 +38,7 @@ enum DogSprite {
     nonisolated(unsafe) private static var loaded: CGImage?
     private static var sheet: CGImage {
         if let loaded { return loaded }
-        guard let url = Bundle.module.url(forResource: dog, withExtension: "png"),
+        guard let url = resource(dog, "png"),
               let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
         else { fatalError("\(dog).png missing from the app bundle") }
@@ -107,14 +107,14 @@ enum DogSprite {
 /// Home objects from Resources/objects.png (drawn in Pixelwright), bottom-aligned on the floor.
 enum ObjectSprite {
     private static let atlas: CGImage = {
-        guard let url = Bundle.module.url(forResource: "objects", withExtension: "png"),
+        guard let url = resource("objects", "png"),
               let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
         else { fatalError("objects.png missing from the app bundle") }
         return img
     }()
     private static let rects: [String: [Int]] = {
-        guard let url = Bundle.module.url(forResource: "objects", withExtension: "json"),
+        guard let url = resource("objects", "json"),
               let data = try? Data(contentsOf: url),
               let r = try? JSONDecoder().decode([String: [Int]].self, from: data)
         else { fatalError("objects.json missing from the app bundle") }
@@ -132,4 +132,9 @@ enum ObjectSprite {
         cache[key] = result
         return result
     }
+}
+
+/// The packaged .app carries its art in Contents/Resources; `swift run` finds it in SwiftPM's resource bundle.
+func resource(_ name: String, _ ext: String) -> URL? {
+    Bundle.main.url(forResource: name, withExtension: ext) ?? Bundle.module.url(forResource: name, withExtension: ext)
 }
