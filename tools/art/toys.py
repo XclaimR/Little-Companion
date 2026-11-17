@@ -20,7 +20,8 @@ def frame(toy, pose):
     t = toy_grid(toy); th, tw = len(t), len(t[0])
     tip = A['mx'] + A['mrx'] - 1                     # front of the muzzle
     if pose == 'toss':                               # flung up in front of his face (the app adds a little hop)
-        left, top = min(48 - tw, int(tip - tw / 2 + 1)), 0
+        left = min(48 - tw, int(tip - tw / 2 + 1))
+        top = max(0, int(A['hy'] - hd2.BREEDS[BREED]['head'][1] - th - 1))
     elif toy in ('ball', 'tennis'):                  # held in the front teeth
         left, top = min(48 - tw, int(tip - tw + 3)), int(A['my'] - 1)
     elif toy == 'plush':                             # carried by the scruff, dangling

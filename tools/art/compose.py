@@ -12,12 +12,16 @@ BREEDS = {
   'pepper':  dict(L=13, ry=6, leg=8, head=(6.4, 5.6), muz=(4.4, 2.5), ear='folded', tail='brush', marks='collie', collar=True),
 }
 
+HEAD = 'all'   # 'none': everything but the head; 'only': just the head (look-back mirrors it)
+HEADS = ('head', 'muzzle', 'earN', 'earF')
+BLINK = False  # eyes shut for one frame (an idle blink)
 def compose(breed, pose):
     P = BREEDS[breed]
     g = [[None] * W for _ in range(H)]          # tone key
     sh = [[None] * W for _ in range(H)]         # shape id
     zones = {}
     def put(x, y, sid, key='b'):
+        if (HEAD == 'none') == (sid in HEADS) and HEAD != 'all': return
         if 0 <= x < W and 0 <= y < H: g[y][x] = key; sh[y][x] = sid
     def ell(sid, cx, cy, rx, ry, key='b'):
         zones.setdefault(sid, (cx, cy, rx, ry))
@@ -63,8 +67,12 @@ def compose(breed, pose):
         if pose == 'walkB': cy -= 0.6
         top = cy + ry - 1.5
         bx, fx = cx - L + 1, cx + L - 5
-        leg('farback', bx + 6 - 2 * walk, top + 1, FLOOR - 2 - (1 if walk == -1 else 0), w=3, far=True)
-        leg('farfront', fx + 4 + 2 * walk, top, FLOOR - 2 - (1 if walk == 1 else 0), w=3, far=True)
+        if walk:   # legs swing from the hip and shoulder (far pair opposite the near pair)
+            sleg('farback', bx + 6, top + 1, bx + 6 - 3 * walk, w=3, far=True)
+            sleg('farfront', fx + 4, top, fx + 4 + 3 * walk, w=3, far=True)
+        else:
+            leg('farback', bx + 6, top + 1, FLOOR - 2, w=3, far=True)
+            leg('farfront', fx + 4, top, FLOOR - 2, w=3, far=True)
         A['tail'] = (cx - L + 2.5, cy - ry * 0.75)
         draw_tail(P, A['tail'], ell, poly, 'stand')
         ell('body', cx, cy, L, ry)
@@ -72,18 +80,21 @@ def compose(breed, pose):
         hx, hy = cx + L + 1, cy - ry - 3
         hy += {'pawUp': 3.5, 'shakeA': -2, 'shakeB': 2.5, 'crouch': 1}.get(pose, 0)   # head down at the ball / flicking a toy up / down
         hx += {'pawUp': .5, 'shakeB': .5}.get(pose, 0)
+        if walk: hy += .8 if walk == 1 else -.4   # the head bobs a whole pixel against the body
         chx = cx + L - 0.5
         poly('neck', [(hx - 7, hy + .5), (hx + 1, hy - 1.5), (chx + 4.5, cy + 1.5), (chx - 5.5, cy + .5)], (chx, cy - 3, 6, 7))
         ell('chest', chx, cy, 4.6, ry)
-        leg('legBN', bx + 2 * walk, top, FLOOR - 2, paw=-1)
+        if walk: sleg('legBN', bx, top, bx + 3 * walk, paw=-1)
+        else: leg('legBN', bx, top, FLOOR - 2, paw=-1)
         if pose == 'pawUp':   # near front paw raised, reaching forward to bat at the ball
             zones['legFN'] = ('leg', fx, 4, False)
             for y in range(int(top - .5), FLOOR - 4):
                 t = (y - top) / max(1, FLOOR - 4 - top)
                 for x in range(int(fx + 4 * t), int(fx + 4 * t) + 4): put(x, y, 'legFN')
             for x in range(int(fx + 4), int(fx + 9)): put(x, FLOOR - 4, 'legFN'); put(x, FLOOR - 5, 'legFN')
+        elif walk: sleg('legFN', fx, top - .5, fx - 3 * walk, paw=1)
         else:
-            leg('legFN', fx - 2 * walk, top - .5, FLOOR - 2, paw=1)
+            leg('legFN', fx, top - .5, FLOOR - 2, paw=1)
         A.update(cx=cx, cy=cy, L=L, ry=ry, chx=chx, belly=(cx - L + 6, cx + L - 4, cy + ry - 1.6))
     elif pose in ('runJU', 'runJD'):   # airborne: JU takes off (hind legs thrust back, fronts folded), JD comes down (fronts reach for the floor, hinds tucked)
         up = pose == 'runJU'
@@ -129,17 +140,18 @@ def compose(breed, pose):
     elif pose in ('sit', 'lickA', 'lickB', 'scratchA', 'scratchB'):
         lick, scratch = pose.startswith('lick'), pose.startswith('scratch')
         cx = 19
-        hx, hy = cx + 10, 10.5
-        if lick: hx, hy = cx + 12.5, 16 + (1 if pose == 'lickB' else 0)       # head bowed to the raised paw, bobbing as it licks
-        if scratch: hx, hy = cx + 9, 13                                     # head tipped down toward the scratching foot
+        sd = round(max(0, 8 - legH) * .6)   # short legs: chest and head sit lower
+        hx, hy = cx + 10, 10.5 + sd
+        if lick: hx, hy = cx + 12.5, 16 + sd + (1 if pose == 'lickB' else 0)       # head bowed to the raised paw, bobbing as it licks
+        if scratch: hx, hy = cx + 9, 13 + sd                                     # head tipped down toward the scratching foot
         A['tail'] = (cx - 6.5, 25)
-        leg('farfront', cx + 10.5, 21, FLOOR - 2, w=3, far=True)
+        leg('farfront', cx + 10.5, 21 + sd, FLOOR - 2, w=3, far=True)
         ell('haunch', cx - 1.5, 27.5, 7.5, 6)
         draw_tail(P, A['tail'], ell, poly, 'sit')
-        ell('body', cx + 4, 21, 5.5, 8.5)
+        ell('body', cx + 4, 21 + sd, 5.5, 8.5 - sd / 2)
         chx = cx + 7.5
         poly('neck', [(hx - 6.5, hy + .5), (hx + 1, hy - 1.5), (chx + 4, 21), (chx - 5, 20)], (chx, 15, 6, 7))
-        ell('chest', chx, 20.5, 4.4, 6.5)
+        ell('chest', chx, 20.5 + sd, 4.4, 6.5)
         if lick:   # near front leg lifted and bent, paw held up under the chin
             zones['legFN'] = ('leg', cx + 6.5, 4, False)
             for y in range(23, 28):
@@ -188,13 +200,14 @@ def compose(breed, pose):
     else:  # bow: rear up, chest down, front legs flat forward, tail high (trip: the same but the front legs buckle under and the nose hits the floor)
         trip = pose == 'trip'
         cx = 19
-        A['tail'] = (cx - 9, 12)
-        leg('farback', cx - 6, 19, FLOOR - 2, w=3, far=True)
+        dy = max(0, 8 - legH)   # short legs (Bean): the whole body sits lower
+        A['tail'] = (cx - 9, 12 + dy)
+        leg('farback', cx - 6, 19 + dy, FLOOR - 2, w=3, far=True)
         draw_tail(P, A['tail'], ell, poly, 'bow')
-        ell('body', cx - 3, 18, 8, ry - .5)
-        ell('chest', cx + 6, 24, 6.5, ry - 1)
-        poly('torso', [(cx - 8, 13), (cx + 2, 15), (cx + 10, 22), (cx + 6, 29), (cx - 6, 23)], (cx, 20, 9, 7))
-        leg('legBN', cx - 10, 20, FLOOR - 2, paw=-1)
+        ell('body', cx - 3, 18 + dy, 8, ry - .5)
+        ell('chest', cx + 6, min(27, 24 + dy), 6.5, ry - 1)
+        poly('torso', [(cx - 8, 13 + dy), (cx + 2, 15 + dy), (cx + 10, 22 + dy), (cx + 6, 29), (cx - 6, 23 + dy)], (cx, 20 + dy, 9, 7))
+        leg('legBN', cx - 10, 20 + dy, FLOOR - 2, paw=-1)
         fx0, fx1 = (cx + 1, cx + 9) if trip else (cx + 6, cx + 18)   # tripping: paws folded back under the chest
         for y in range(29, 31):
             for x in range(int(fx0 + 2), int(fx1 + 1)): put(x, y, 'farpaw', 'd')
@@ -202,8 +215,8 @@ def compose(breed, pose):
             for x in range(int(fx0), int(fx1)): put(x, y, 'pawF')
         zones['pawF'] = ('leg', fx0, 12, False)
         zones['farpaw'] = ('leg', fx0 + 2, 11, True)
-        hx, hy = (cx + 14, 26.5) if trip else (cx + 15, 21.5)
-        A.update(cx=cx - 3, cy=18, L=8, ry=ry - .5, chx=cx + 6, belly=None)
+        hx, hy = (cx + 14, min(27.5, 26.5 + dy)) if trip else (cx + 15, 21.5 + dy * .7)
+        A.update(cx=cx - 3, cy=18 + dy, L=8, ry=ry - .5, chx=cx + 6, belly=None)
 
     # head, muzzle, ears
     A.update(hx=hx, hy=hy)
@@ -266,8 +279,8 @@ def compose(breed, pose):
     g = out
     # remove lone outline corner nubs (outline pixel with a single outline neighbour and no fill neighbour diagonally) — keep simple: none
 
-    draw_face(P, g, A, sleeping)
-    if P.get('collar') and pose not in ('sleep', 'sleepT', 'bow'): draw_collar(g, A, pose)
+    if HEAD != 'none': draw_face(P, g, A, sleeping, squint=pose.startswith(('lick', 'scratch')))
+    if P.get('collar') and pose not in ('sleep', 'sleepT', 'bow') and HEAD != 'only': draw_collar(g, A, pose)
     global LAST_ANCHORS
     LAST_ANCHORS = dict(A, mrx=P['muz'][0])   # mouth/head positions, for baking toys into frames
     return g
@@ -377,10 +390,14 @@ def apply_marks(P, pose, g, sh, A):
 def set_if(g, x, y, k):
     if 0 <= x < W and 0 <= y < H and g[y][x]: g[y][x] = k
 
-def draw_face(P, g, A, sleeping):
+def draw_face(P, g, A, sleeping, squint=False):
     hx, hy = A['hx'], A['hy']
     ex, ey = int(hx + 3), int(hy - 1.5)
-    if sleeping:
+    if squint and not sleeping:   # blissful ^ while licking or scratching
+        for x, y in ((ex - 1, ey + 1), (ex, ey), (ex + 1, ey), (ex + 2, ey + 1)): set_if(g, x, y, 'y')
+    elif BLINK and not sleeping:  # a blink: a short shut line
+        for x, y in ((ex - 1, ey + 1), (ex, ey + 1), (ex + 1, ey + 1)): set_if(g, x, y, 'y')
+    elif sleeping:
         for x, y in ((ex - 1, ey + 1), (ex, ey + 2), (ex + 1, ey + 2), (ex + 2, ey + 1)): set_if(g, x, y, 'y')
     else:
         for (dx, dy, k) in ((0, 0, 'w'), (1, 0, 'y'), (0, 1, 'y'), (1, 1, 'y')): set_if(g, ex + dx, ey + dy, k)
@@ -413,7 +430,7 @@ PAL = {   # key -> token per dog
   'pudding': dict(o='pudding-outline', d='pudding-deep', s='pudding-shade', b='pudding-base', l='pudding-light', c='pudding-mark', k='pudding-creamshade', e='pudding-saddle', f='pudding-saddlelight', a='pudding-ear', y='pudding-eye', w='mochi-light', n='pudding-eye', m='pudding-mouth', r='pudding-collar', q='pudding-collardark', t='biscuit-tag'),
   'mochi': dict(a='mochi-ear', c='mochi-mark', k='mochi-shade', o='mochi-outline', d='mochi-deep', s='mochi-shade', b='mochi-base', l='mochi-light', i='plush-e', p='mochi-blush', y='mochi-eye', w='mochi-light', n='mochi-nose', m='mochi-mouth', r='mochi-collar', q='mochi-collardark', t='biscuit-tag'),
   'bean': dict(o='bean-outline', d='bean-deep', s='bean-shade', b='bean-base', l='bean-light', c='bean-mark', a='bean-ear', y='bean-eye', w='mochi-light', n='bean-eye', m='bean-mouth', r='bean-collar', q='bean-collardark', t='biscuit-tag'),
-  'pepper': dict(a='pepper-ear', o='pepper-outline', d='pepper-shade', s='pepper-shade', b='pepper-base', l='pepper-light', c='pepper-mark', k='pepper-markshade', i='pepper-inner', y='pepper-eye', w='mochi-light', n='pepper-nose', m='pepper-markshade', r='biscuit-tag', q='pepper-collardark', t='biscuit-collar'),
+  'pepper': dict(a='pepper-ear', o='pepper-outline', d='pepper-deep', s='pepper-shade', b='pepper-base', l='pepper-light', c='pepper-mark', k='pepper-markshade', i='pepper-inner', y='pepper-eye', w='mochi-light', n='pepper-nose', m='pepper-markshade', r='biscuit-tag', q='pepper-collardark', t='biscuit-collar'),
 }
 HEX = {}   # token -> hex, filled from palette.json
 FALLBACK = {'e': 's', 'f': 'b', 'a': 's', 'c': 'l', 'k': 's', 'i': 'l', 'p': 'l', 'w': 'l'}   # beagle-only keys (saddle etc.) on other breeds

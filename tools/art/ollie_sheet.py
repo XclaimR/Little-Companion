@@ -7,20 +7,19 @@ import front, sleepers, toys, os
 B = sys.argv[2] if len(sys.argv) > 2 else 'pudding'
 NAME = {'pudding': 'ollie'}.get(B, B)
 front.EARS = 'floppy' if hd2.BREEDS[B]['ear'] in ('floppy', 'long') else hd2.BREEDS[B]['ear']
-toys.BREED = B
+toys.BREED = sleepers.BREED = front.BREED = B
 def frame(p):
     if p in sleepers.POSITIONS: return sleepers.POSITIONS[p]()
     if p == 'front': return front.front_sit()
     if p == 'back': return front.back_sit()
-    if p == 'look':
-        g = hd2.compose(B, 'stand')
-        region = [row[30:48] for row in g[:18]]
-        for y in range(18):
-            for i, k in enumerate(region[y][::-1]):
-                if k is not None or y < 14: g[y][30 + i] = k
-        for y in range(18):                      # collar pixels mirrored onto the far side become ear
-            for x in range(40, 48):
-                if g[y][x] in ('r', 'q'): g[y][x] = 'a'
+    if p == 'look':   # glancing back: the body as it stands, the head turned round about its own centre
+        hd2.HEAD = 'none'; g = hd2.compose(B, 'stand')
+        hd2.HEAD = 'only'; head = hd2.compose(B, 'stand'); hx = hd2.LAST_ANCHORS['hx']
+        hd2.HEAD = 'all'
+        for y in range(hd2.H):
+            for x in range(hd2.W):
+                x2 = int(round(2 * hx - x - 1))
+                if head[y][x] and 0 <= x2 < hd2.W: g[y][x2] = head[y][x]
         return g
     g = hd2.compose(B, p)
     if p == 'sit' and B == 'pudding':   # studio touch-up on Ollie's sit
@@ -35,7 +34,7 @@ def wag(p, w):
     finally: hd2.WAG = 0
 frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB', 'look', 'bow') for w in (-1, 1)]   # 55-70: tail wag A/B for each awake pose
 frames += [frame(p) for p in ('crouch', 'runJU', 'runJD')]   # 71-73: jump crouch, take-off, coming down
-frames += [frame('trip'), sleepers.belly(awake=True), sleepers.side(awake=True)]   # 74-76: trip, tumble roll, sprawled after a tumble
+frames += [frame('trip'), sleepers.tumble_roll(), sleepers.tumble_sprawl()]   # 74-76: trip, head over heels, splat
 def lick(p):
     g = hd2.compose(B, p)
     a = hd2.LAST_ANCHORS
@@ -44,6 +43,11 @@ def lick(p):
         g[y + dy][x + dx] = '#e8798c'
     return g
 frames += [lick('lickA'), lick('lickB'), frame('scratchA'), frame('scratchB')]   # 77-80: licking a paw, scratching an ear
+def blink(p):
+    hd2.BLINK = front.BLINK = True
+    try: return front.front_sit() if p == 'front' else frame(p)
+    finally: hd2.BLINK = front.BLINK = False
+frames += [blink(p) for p in ('stand', 'sit', 'front')]   # 81-83: an idle blink standing, sitting, sitting facing you
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):
