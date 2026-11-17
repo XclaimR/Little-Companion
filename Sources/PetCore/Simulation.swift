@@ -44,7 +44,7 @@ public func simulate(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> SimR
     var lastStarted = -1.0, lastActivity = brain.s.activity
     var nextTimeline = 0.0
     var addedBall = false
-    var wasJumping = false, lastAttention: String? = nil
+    var wasJumping = false, lastAttention: Attention? = nil
     var busySince: Double? = nil, wasBusyRetreat = false
 
     var t = 0.0
@@ -90,13 +90,13 @@ public func simulate(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> SimR
         }
         wasJumping = jumping
         if s.attention != lastAttention {
-            if s.attention == "head" { r.glances += 1 } else if s.attention == "body" { r.turns += 1 }
+            if s.attention == .head { r.glances += 1 } else if s.attention == .body { r.turns += 1 }
             lastAttention = s.attention
         }
 
         if (s.busyRetreat == true) && !wasBusyRetreat { r.busyRetreats += 1 }
         wasBusyRetreat = s.busyRetreat == true
-        let outOfTheWay = s.activity.act == .kennel && s.activity.phase == "inside" || s.activity.act == .sleep && s.activity.destX == nil
+        let outOfTheWay = s.activity.act == .kennel && s.activity.kennel == .inside || s.activity.act == .sleep && s.activity.destX == nil
         busySince = busy && !outOfTheWay ? (busySince ?? t) : nil   // time out and about during a busy spell
         if let since = busySince, t - since > 120, s.activity.act != .eat, s.activity.act != .drink {
             r.failures.append("still out and about 2 min into a busy spell at t=\(Int(t))s (\(s.activity.act))"); busySince = t

@@ -28,7 +28,7 @@ import Testing
             b.s.needs = Needs(hunger: 0, thirst: 0, tiredness: 0, boredom: 0)
             let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: watching ? 520 : nil)
             for _ in 0..<(10 * 120) {
-                if watching { b.s.attention = "head"; b.s.attentionUntil = b.s.time + 10 }
+                if watching { b.s.attention = .head; b.s.attentionUntil = b.s.time + 10 }
                 b.s.needs = Needs(hunger: 0, thirst: 0, tiredness: 0, boredom: 0)
                 b.update(dt: 0.1, env: env)
                 let p = b.pose
@@ -95,7 +95,7 @@ import Testing
     var stages: [String] = []
     for _ in 0..<30 {
         b.update(dt: 0.1, env: env)
-        let f = b.pose.fall ?? "-"
+        let f = b.pose.fall?.rawValue ?? "-"
         if stages.last != f { stages.append(f) }
     }
     #expect(stages == ["trip", "roll", "sprawl", "up", "sheepish", "-"])
@@ -114,7 +114,7 @@ import Testing
             guard b.s.activity.act == .groom else { break }
             let p = b.pose
             #expect(p.anim == .sit && p.groom != nil)
-            if let g = p.groom { seen.insert(g) }
+            if let g = p.groom { seen.insert(g.rawValue) }
         }
     }
     #expect(seen == ["lick", "scratch"])

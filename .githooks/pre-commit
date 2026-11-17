@@ -28,8 +28,8 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 echo "security review: the security-reviewer agent is reading the staged changes…" >&2
 out=$( { git diff --cached --stat; echo; git diff --cached --no-color; } | \
-  claude -p --agent security-reviewer --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git status:*)" "Bash(git log:*)" \
-  "Review the staged diff on stdin for security and privacy risks before it is committed to a public GitHub repo. Follow your instructions and end with the VERDICT line." 2>&1)
+  claude -p "Review the staged diff on stdin for security and privacy risks before it is committed to a public GitHub repo. Follow your instructions and end with the VERDICT line." \
+  --agent security-reviewer --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git status:*)" "Bash(git log:*)" 2>&1)
 status=$?
 echo "$out" >&2
 verdict=$(printf '%s\n' "$out" | grep -E '^VERDICT: (PASS|BLOCK)$' | tail -1)

@@ -47,7 +47,9 @@ public struct PetObject: Codable, Sendable, Identifiable, Equatable {
 public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable {
     case idle, sit, lookAround, wander, sniff, sleep, stretch, groom, eat, drink, play, carry, zoomies, greet, react, follow, kennel
 
-    /// Walking pace, points/s. Running (Activity.running) is 130; zoomies are always a sprint.
+    /// Running pace (Activity.running), points/s.
+    static let runSpeed = 130.0
+    /// Walking pace, points/s. Running is `runSpeed`; zoomies are always a sprint.
     var speed: Double { switch self { case .zoomies: 170; case .greet, .follow: 50; default: 42 } }
 
     /// Minimum seconds before the same act scores normally again.
@@ -77,6 +79,19 @@ public struct Needs: Codable, Sendable, Equatable {
     }
 }
 
+/// Where a kennel visit is: walking to the door, going in, inside, coming back out.
+public enum KennelPhase: String, Codable, Sendable { case door, enter, inside, exit }
+/// How it reacts to the cursor: a glance, turning to face it, or going after it.
+public enum Attention: String, Codable, Sendable { case head, body, follow }
+public enum SleepPos: String, Codable, Sendable, CaseIterable { case flat, curl, side, belly }
+/// A trip staggers on; a tumble rolls over, lies there a moment and gets up sheepish.
+public enum FallKind: String, Codable, Sendable { case trip, tumble }
+/// Where it is in a stumble, for the renderer.
+public enum FallStage: String, Sendable { case trip, roll, sprawl, up, sheepish }
+/// Licking a front paw, or scratching an ear with a hind foot.
+public enum Groom: String, Codable, Sendable { case lick, scratch }
+public enum PlayStyle: String, Sendable { case chase, shake }
+
 public struct Activity: Codable, Sendable, Equatable {
     public var act: Act
     public var target: String?
@@ -86,7 +101,11 @@ public struct Activity: Codable, Sendable, Equatable {
     public var running: Bool? = nil   // run instead of walk to the destination (optional: older saves load)
     public var front: Bool? = nil     // sitting facing the viewer
     public var back: Bool? = nil      // sitting with its back to the viewer
-    public var phase: String? = nil   // kennel visit: "door" → "enter" → "inside" → "exit"
+    public var phase: String? = nil   // stored as text (older saves): the kennel phase, or the grooming style
+    /// The kennel visit's phase (door → enter → inside → exit).
+    public var kennel: KennelPhase? { get { phase.flatMap(KennelPhase.init) } set { phase = newValue?.rawValue } }
+    /// What it's grooming.
+    public var groom: Groom? { get { phase.flatMap(Groom.init) } set { phase = newValue?.rawValue } }
 }
 
 public struct Memory: Codable, Sendable, Equatable {
@@ -98,7 +117,9 @@ public struct Memory: Codable, Sendable, Equatable {
 
 /// Everything about the dog that persists between launches.
 public struct DogState: Codable, Sendable, Equatable {
-    public var version = 1
+    /// Save format version. A save from a newer build is never overwritten (see Store).
+    public static let currentVersion = 1
+    public var version = DogState.currentVersion
     public var personality: Personality
     public var innate: [Kind: Double]          // true hidden taste, -1...1
     public var learned: [String: Double] = [:] // object id (or "floor") → developed preference, -1...1
@@ -122,19 +143,19 @@ public struct DogState: Codable, Sendable, Equatable {
     public var jumpAt: Double?            // a jump in progress started at this time
     public var jumpLen: Double?
     public var jumpHeight: Double?
-    public var attention: String?         // "head", "body" or "follow": how it is reacting to the cursor
+    public var attention: Attention?      // how it is reacting to the cursor
     public var attentionUntil: Double?
     public var attentionCooldown: Double?
     public var lastCursorX: Double?
     public var busyRetreat: Bool?       // went into the kennel because the Mac was busy
     public var nextRoll: Double?        // when the ball it's playing with next rolls away
     public var nextDream: Double?       // when the next dream (twitching) starts while asleep
-    public var sleepPos: String?        // "flat", "curl", "side" or "belly"
+    public var sleepPos: SleepPos?
     public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
     public var tossUntil: Double?       // tossing the toy it's holding up in the air
     public var wagUntil: Double?        // tail wagging until then
     public var fallAt: Double?          // tripped (or went head over heels) at this time
-    public var fallKind: String?        // "trip": stumbles and carries on; "tumble": rolls over, lies there a moment, gets up sheepish
+    public var fallKind: FallKind?
     public var fallSpeed: Double?       // how fast it was going, for the slide
     public var pendingCarry: String?    // pick this toy up and trot off with it next
 }
@@ -146,8 +167,14 @@ public struct Environment: Sendable {
     public var userIdle: Double   // seconds since the user last touched mouse/keyboard
     public var cursorX: Double?   // set when the cursor is near the dog's floor
     public var systemBusy: Bool   // the Mac is under heavy load: the dog keeps out of the way in its kennel
-    public init(minX: Double, maxX: Double, hour: Double, userIdle: Double, cursorX: Double?, systemBusy: Bool = false) {
+    public var reduceMotion: Bool // the user asked for less motion: no zoomies, jumps or tumbles, and walks instead of runs
+    /// Kennel geometry in points from its centre, from the art: just clear of the open end, and where it can stand inside.
+    public var kennelDoorOutside: Double
+    public var kennelInside: ClosedRange<Double>
+    public init(minX: Double, maxX: Double, hour: Double, userIdle: Double, cursorX: Double?, systemBusy: Bool = false,
+                reduceMotion: Bool = false, kennelDoorOutside: Double = 88, kennelInside: ClosedRange<Double> = -16...0) {
         self.minX = minX; self.maxX = maxX; self.hour = hour; self.userIdle = userIdle; self.cursorX = cursorX; self.systemBusy = systemBusy
+        self.reduceMotion = reduceMotion; self.kennelDoorOutside = kennelDoorOutside; self.kennelInside = kennelInside
     }
 }
 
@@ -164,18 +191,33 @@ public struct Pose: Sendable, Equatable {
     public var jump: Double? = nil          // 0...1 through a jump, nil when on the ground
     public var jumpHeight: Double = 0       // points at the top of the arc
     public var crouch = false               // crouched just before a jump or just after landing
-    public var attention: String? = nil     // "head", "body", "follow"
+    public var attention: Attention? = nil
     public var lookX: Double? = nil         // where it is looking (cursor x) while attention is "head"
     public var hidden: Bool = false         // inside the kennel: draw nothing
     public var front: Bool = false          // sitting facing the viewer
     public var back: Bool = false           // sitting facing away
-    public var play: String? = nil          // "chase" (balls) or "shake" (plush, rope) while playing
+    public var play: PlayStyle? = nil       // chasing a ball, or shaking a plush or rope
     public var inKennel = false             // through the doorway or inside: the kennel's walls are in front of it
-    public var sleepPos: String? = nil      // sleeping position while asleep
+    public var sleepPos: SleepPos? = nil    // sleeping position while asleep
     public var inBed: String? = nil         // id of the bed it's lying in
-    public var holding: String? = nil       // toy art in its mouth: "ball", "tennis", "plush" or "rope"
+    public var holding: PetObject? = nil    // the toy in its mouth (the renderer picks its art)
     public var toss = false                 // flinging the held toy up
     public var wag = false                  // tail wagging
-    public var groom: String? = nil         // "lick" (a front paw) or "scratch" (an ear, with a hind foot)
-    public var fall: String? = nil          // "trip", "roll", "sprawl", "up", "sheepish": where it is in a stumble
+    public var groom: Groom? = nil
+    public var fall: FallStage? = nil       // where it is in a stumble
+}
+
+/// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.
+/// `halfWidth` gives each object's half width in points (from its art).
+public func repairHome(_ objects: inout [PetObject], minX: Double, maxX: Double, halfWidth: (PetObject) -> Double) {
+    if !objects.contains(where: { $0.kind == .kennel }) { objects.insert(PetObject(id: "kennel", kind: .kennel, x: minX + 20), at: 0) }
+    for i in objects.indices { objects[i].x = min(max(objects[i].x, minX), maxX) }
+    guard let k = objects.first(where: { $0.kind == .kennel }) else { return }
+    var cursor = k.x + halfWidth(k) + 8
+    for o in objects.filter({ $0.kind != .kennel }).sorted(by: { $0.x < $1.x }) where o.x < cursor + 200 {
+        let half = halfWidth(o)
+        guard let i = objects.firstIndex(where: { $0.id == o.id }) else { continue }
+        if o.x - half < cursor { objects[i].x = cursor + half }
+        cursor = max(cursor, objects[i].x + half + 8)
+    }
 }

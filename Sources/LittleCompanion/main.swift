@@ -7,24 +7,32 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var world: World?
     var statusItem: NSStatusItem?
     let header = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let dogMenu = NSMenu()
+    let hideItem = NSMenuItem(title: "Hide for an hour", action: #selector(toggleHide), keyEquivalent: "")
+    let readOnlyNote = NSMenuItem(title: "Saved by a newer version — not saving", action: nil, keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.title = "🐾"
+        item.button?.setAccessibilityLabel("Little Companion")
         let menu = NSMenu()
+        menu.delegate = self
         header.isEnabled = false
         menu.addItem(header)
+        readOnlyNote.isEnabled = false
+        menu.addItem(readOnlyNote)
         let dogs = menu.addItem(withTitle: "Change dog", action: nil, keyEquivalent: "")
         for (id, name, kind) in DogSprite.dogs {
             let item = dogMenu.addItem(withTitle: "\(name) — \(kind)", action: #selector(pickDog(_:)), keyEquivalent: "")
             item.target = self; item.representedObject = id
         }
         menu.setSubmenu(dogMenu, for: dogs)
+        hideItem.target = self
+        menu.addItem(hideItem)
         menu.addItem(.separator())
         if ProcessInfo.processInfo.environment["LC_DEBUG"] != nil {
             for (title, sel) in [("Test: play with the ball", #selector(testBall)), ("Test: shake the plush", #selector(testPlush)),
@@ -45,7 +53,8 @@ app.run()
         item.menu = menu
         statusItem = item
 
-        world = World(screen: NSScreen.main!)
+        world = World(screen: NSScreen.screens.first!)   // the menu-bar screen, where the Dock's floor is
+        world?.onStateChange = { [weak self] in self?.refreshDogMenu() }
         refreshDogMenu()
     }
 
@@ -62,10 +71,22 @@ app.run()
         refreshDogMenu()
     }
 
-    func refreshDogMenu() {
-        header.title = DogSprite.dogs.first { $0.0 == DogSprite.dog }?.1 ?? "Little Companion"
-        for item in dogMenu.items { item.state = item.representedObject as? String == DogSprite.dog ? .on : .off }
+    /// Out of sight for an hour (screen sharing, a demo); the dog keeps living meanwhile.
+    @objc func toggleHide() {
+        guard let world else { return }
+        if world.isHidden { world.showNow() } else { world.hide(for: 3600) }
+        refreshDogMenu()
     }
+
+    func refreshDogMenu() {
+        let name = DogSprite.dogs.first { $0.0 == DogSprite.dog }?.1 ?? "Little Companion"
+        header.title = name
+        for item in dogMenu.items { item.state = item.representedObject as? String == DogSprite.dog ? .on : .off }
+        hideItem.title = world?.isHidden == true ? "Show \(name) now" : "Hide for an hour"
+        readOnlyNote.isHidden = !Store.readOnly.contains(DogSprite.dog)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) { refreshDogMenu() }
 
     func applicationWillTerminate(_ note: Notification) { world?.save() }
 

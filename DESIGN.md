@@ -22,7 +22,7 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 ## Windows
 1. **Desktop layer** — transparent full-screen window above desktop icons, below normal windows. Main display only, all Spaces, not over full-screen apps. Windows occlude the dog like icons. Only dog/kennel/toy clicks are caught; everything else passes through.
 2. **House popup** — ~480×320, opens above the kennel on click; closes on Esc / click-outside / kennel click.
-3. **Menu bar icon only**, no Dock icon. Open house · Call dog home (a suggestion) · Hide for 1 hour · Quit.
+3. **Menu bar icon only**, no Dock icon. As built: the dog's name · Change dog ▸ (Ollie, Biscuit, Mochi, Bean, Pepper) · Hide for an hour · Open at login (installed app) · Quit. Planned: Open house · Call dog home (a suggestion).
 
 ## Desktop world
 - Side-on with gravity. Platforms: floor (above Dock), window title-bar tops, desktop icons (via read-only Finder AppleScript, asked once; skipped if denied). Brief screen-edge climbs.
@@ -48,7 +48,7 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 - `Model.swift` — state types (`DogState` is the whole persisted life), `SplitMix` seeded RNG.
 - `Brain.swift` — scoring (`candidates`), weighted pick (`decide`, 3% "got distracted" random pick), `start`/`arrive`/`perform`/`finish`, needs over time, preference decay, interruptions, `poke`, `add` (new object), `resume(afterOffline:)`, `pose` for the renderer.
 - Acts: idle, sit, lookAround, wander, sniff, sleep, stretch, groom, eat, drink, play, carry, zoomies, greet, react. Preference factor `exp(1.3·pref)`: a favourite is ~3.7× likelier, never certain.
-- Typical simulated day (8 dogs): sleep 47–54%, sit ~15%, idle ~9%, play 5–9%, wander 4–8%, carry 1–7%; nights mostly asleep with brief wakes. New tennis ball at 11:00 ends the day anywhere from −0.38 (went off it) to +0.50 (carries it everywhere).
+- Typical simulated day (8 dogs, `simrun 8 24 1`): sleep 58–62%, kennel 6–13%, sit ~13%, idle ~8%, play 5–8%, wander 4–6%, carry 2–5%; asleep through the night (about 22:00–06:00: a rested dog dozes on instead of getting up), lively mornings and evenings. New tennis ball at 11:00 ends the day anywhere from going off it to carrying it everywhere.
 - App ticks: 20 Hz while moving, 5 Hz while still, 1 Hz asleep; timer gaps are simulated in ≤1 s steps (never dropped); gaps > 8 h use `resume`.
 - Circadian rhythm from local clock; user idle ≥10 min → longer naps; sometimes wanders to cursor on return.
 - App closed: needs drift toward neutral; dog wakes in its favourite spot on launch.
@@ -62,9 +62,17 @@ A cosy, non-intrusive dog that lives on your desktop. It should feel like living
 - **Cursor attention:** noticing a moving cursor near its floor, the dog chooses: *head* (glance; look-back frame when the cursor is behind), *body* (turns to face it) or *follow* (walks/runs after it). Lazy → glance, curious → turn, playful/affectionate → follow; tired or unhappy dogs mostly ignore it.
 - **Play by toy:** balls roll away every few seconds and get chased, pounced on and batted (paw-up frame); plush and rope are grabbed and shaken (shake-up/down frames, toy held in the mouth), then dropped where play ended.
 - **Sitting facing you** (front frame): sometimes when sitting (more if affectionate), when greeting you, and when it notices the cursor while sitting.
-- **Kennel:** a side-on plank cabin on the desktop floor (bottom-left), drawn as two layers: a lamp-lit interior behind the dog, and walls/roof with a window and an open, full-height doorway at the right end in front of it. The dog walks to the doorway, in, and back out the same way; while inside it potters, sits or naps and you see only its soft shadow through the window. Independent/lazy/tired dogs pop in for 3–15 min now and then (≈10–15% of the day). When the Mac is busy (1-min load average > 75% of cores) any awake dog runs inside within seconds and stays until it calms down.
+- **Kennel:** a side-on plank cabin on the desktop floor (bottom-left), drawn as two layers: a lamp-lit interior behind the dog, and walls/roof with a window and an open, full-height doorway at the right end in front of it. The dog walks to the doorway, in, and back out the same way; while inside it potters, sits or naps and you see only its soft shadow through the window. Independent/lazy/tired dogs pop in for 3–15 min now and then (≈6–13% of the day). When the Mac is busy (1-min load average > 75% of cores) any awake dog runs inside within seconds and stays until it calms down.
 - **Sleeping:** in its bed it lies on the cushion with the rim in front. Four positions — chin on paws, curled nose-to-tail, sprawled on its side, belly-up — chosen by a hidden taste leaned by personality (independent → curl, energetic → side, laid-back + affectionate → belly-up), refined by experience into a favourite, and shifting every few minutes. Every minute or few it dreams: each position has its own twitch (paw kick, ear flick, legs paddling, paws kicking the air); playful, energetic dogs dream more.
 - Ollie's art: 23 frames in `Resources/ollie.png`, objects in `Resources/objects.png` + `objects.json` — both mirrored in the Pixelwright project "Little Companion".
+
+### Living on a real Mac
+- **Sleep and wake:** the dog stops when the Mac sleeps, its screens sleep or the session locks, and catches up with real (wall-clock) time on return. After 30+ minutes away it says hello where it is (up from a light doze, sits facing you, wags), whether or not the cursor is near.
+- **Screens:** the floor and walkable range are re-read when the resolution, the Dock or the displays change; the home is kept in proportion and inside the range (a Dock on the left or right shrinks it). The dog lives on the menu-bar screen.
+- **Hide for an hour** (menu): out of sight for screen sharing or a demo; the dog keeps living meanwhile.
+- **Reduce Motion** (accessibility setting): no zoomies, jumps or tumbles, walks instead of runs, a still z instead of floating ones.
+- **Energy:** the z's puff once every 15–30 s (none while you're away) instead of animating all night; drawing is skipped while the dog is under a window, and capped at 10 fps in Low Power Mode. Wags, grooming and blinks tick at their own pace.
+- **Saves:** a save from a newer build is never overwritten (the menu says so); an unreadable one is moved aside first (named after the dog), and if that fails it's left alone.
 
 ## Tooling & persistence
 - Headless runner (`simrun`): fast-forwards dogs through simulated workdays (~0.3 s per day), checks invariants (needs in range, on the floor, never stuck awake 20 min, no maxed need for an hour, sleep 30–80%, no awake act > 30%, ≥ 8 different acts), prints histogram, per-object preferences and an hourly timeline.
@@ -92,6 +100,7 @@ Env: `LC_DEBUG=1` debug overlay, ledges and a **Test** section in the 🐾 menu 
 Unlock/purchase economy, multi-monitor, sound, dragging the dog, settings beyond the menu bar.
 
 ## TODO (post-MVP)
+- [ ] **Random, stochastic elements in the world.** Now and then (every few days, only when the user is around) something new appears: a tennis ball, a stick, a leaf in autumn, at most one new thing at a time. The engine already handles novelty (`Brain.add`: the "!" / "?" reactions, sniffing, learning to like or ignore it); only the app never adds anything yet, so after a week preferences settle and days look alike.
 - [ ] **Species choice: dog, cat, bird.** Picked at adoption; one pet at a time until multi-pet lands.
   - Keep species out of the engine core: a species is data (actions, animations, trait ranges, movement profile) plugged into the same utility engine.
   - **Cat:** higher jumps, likes high ledges (window tops, icons), more independent/aloof defaults, naps in sunbeams/boxes, knocks small toys off ledges.

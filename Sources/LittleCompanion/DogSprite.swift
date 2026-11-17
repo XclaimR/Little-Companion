@@ -1,13 +1,25 @@
 import CoreGraphics
 import Foundation
 import ImageIO
+import PetCore
 
 /// The current dog's pixel-art frames, from Resources/<dog>.png (48×36 frames facing right, built by tools/art/ollie_sheet.py).
 enum DogSprite {
     enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch
         case wagStandA = 55, wagStandB, wagSitA, wagSitB, wagFrontA, wagFrontB, wagBackA, wagBackB,   // after the 32 baked toy frames
              wagWalkA1, wagWalkA2, wagWalkB1, wagWalkB2, wagLookA, wagLookB, wagBowA, wagBowB,
-             jumpCrouch, jumpUp, jumpDown, trip, tumbleRoll, tumbleSprawl, lickA, lickB, scratchA, scratchB
+             jumpCrouch, jumpUp, jumpDown, trip, tumbleRoll, tumbleSprawl, lickA, lickB, scratchA, scratchB,
+             blinkStand, blinkSit, blinkFront
+
+        /// The same pose with its eyes shut for an idle blink; nil if this pose has no blink art.
+        var blinking: Frame? {
+            switch self {
+            case .stand: .blinkStand
+            case .sit: .blinkSit
+            case .sitFront: .blinkFront
+            default: nil
+            }
+        }
 
         /// The same pose with the tail wagging, flicking between two frames at `t`; nil if this pose has no wag art.
         func wagging(_ t: Double) -> Frame? {
@@ -51,6 +63,8 @@ enum DogSprite {
 
     /// Ollie holding a toy: frames 23 + toy×8 + pose (walk A/B, run A/B, stand, shake up/down, toss).
     static let toys = ["ball", "tennis", "plush", "rope"]
+    /// Which toy art a held object uses: the tennis ball has its own; otherwise the kind's.
+    static func toyArt(_ o: PetObject) -> String { o.id == "tennis" ? "tennis" : o.kind.rawValue }
     static func toyFrame(_ toy: String, _ pose: Int) -> Int? { toys.firstIndex(of: toy).map { 23 + $0 * 8 + pose } }
 
     static func image(_ index: Int, facing dir: CGFloat) -> CGImage {

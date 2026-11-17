@@ -7,6 +7,10 @@ public struct Brain: Sendable {
     public var s: DogState
     /// Top candidates of the last decision, for the debug overlay.
     public private(set) var lastScores: [String] = []
+    /// The user asked for less motion (from the environment each update): no jumps, zoomies or tumbles, and no running.
+    var calm = false
+    /// Seconds without input after which the user counts as away (sleep is likelier; coming back is a welcome).
+    public static let awayAfter = 600.0
 
     public init(seed: UInt64) {
         var rng = SplitMix(seed: seed)
@@ -24,7 +28,9 @@ public struct Brain: Sendable {
     public mutating func update(dt: Double, env: Environment) {
         s.time += dt
         let circ = Self.sleepiness(hour: env.hour)
-        if s.lastIdle > 600 && env.userIdle < 5 { s.greetBoostUntil = s.time + 180 } // you came back
+        calm = env.reduceMotion
+        defer { if calm { s.activity.running = nil } }   // Reduce Motion: walks, never runs
+        if s.lastIdle > Brain.awayAfter && env.userIdle < 5 { welcomeBack(env: env) } // you came back
         s.lastIdle = env.userIdle
         evolveNeeds(dt, circ: circ)
         decayPreferences(dt)
@@ -47,12 +53,12 @@ public struct Brain: Sendable {
         }
         if let at = s.fallAt {   // mid-stumble
             let t = s.time - at
-            if t >= (s.fallKind == "tumble" ? Brain.tumbleLen : Brain.tripLen) { s.fallAt = nil; s.fallKind = nil; s.fallSpeed = nil }
-            else if s.fallKind == "tumble" {   // everything waits until it's back on its feet; it skids a little first
+            if t >= (s.fallKind == .tumble ? Brain.tumbleLen : Brain.tripLen) { s.fallAt = nil; s.fallKind = nil; s.fallSpeed = nil }
+            else if s.fallKind == .tumble {   // everything waits until it's back on its feet; it skids a little first
                 if t < 0.45 { s.x = min(max(s.x + s.facing * (s.fallSpeed ?? 60) * (1 - t / 0.45) * dt, env.minX), env.maxX) }
                 return
             }
-        } else if let fast = movingGait, s.jumpAt == nil, s.carrying == nil, s.activity.act != .kennel,
+        } else if !calm, let fast = movingGait, s.jumpAt == nil, s.carrying == nil, s.activity.act != .kennel,
                   rand(0...1) < dt * s.personality.clumsy * (fast ? 0.012 : 0.002) * (0.6 + s.needs.tiredness) {
             fall(tumble: rand(0...1) < (fast ? 0.5 : 0.15))   // clumsy paws: likelier running and tired, and a tumble mostly at speed
         }
@@ -69,7 +75,7 @@ public struct Brain: Sendable {
         }
 
         var a = s.activity
-        if a.act == .kennel && a.phase == "inside" && a.destX == nil {   // inside: stay while the Mac is busy, come out soon after it calms down
+        if a.act == .kennel && a.kennel == .inside && a.destX == nil {   // inside: stay while the Mac is busy, come out soon after it calms down
             if env.systemBusy { a.remaining = max(a.remaining, 30) }
             else if s.busyRetreat == true { a.remaining = min(a.remaining, rand(20...90)); s.busyRetreat = nil }
         }
@@ -81,7 +87,7 @@ public struct Brain: Sendable {
         }
         if let dest = a.destX {
             let dest = min(max(dest, env.minX), env.maxX)
-            let step = (a.running == true && a.act != .zoomies ? 130 : a.act.speed) * dt * (s.fallKind == "trip" ? 0.4 : 1)   // tripping: staggers on, slower
+            let step = (a.running == true && a.act != .zoomies ? Act.runSpeed : a.act.speed) * dt * (s.fallKind == .trip ? 0.4 : 1)   // tripping: staggers on, slower
             let d = dest - s.x
             if abs(d) <= step {
                 s.x = dest
@@ -98,18 +104,41 @@ public struct Brain: Sendable {
         }
         s.activity = a
         if let c = s.carrying, let i = s.objects.firstIndex(where: { $0.id == c }) { s.objects[i].x = s.x + 36 * s.facing }
-        if a.remaining <= 0 && (a.destX == nil || a.act == .zoomies || a.act == .follow || a.act == .play) && !(a.act == .kennel && a.phase != "exit") { finish(); decide(env) }
+        if a.remaining <= 0 && (a.destX == nil || a.act == .zoomies || a.act == .follow || a.act == .play) && !(a.act == .kennel && a.kennel != .exit) { finish(); decide(env) }
         if s.activity.act == .sleep && s.activity.destX == nil { s.jumpAt = nil }   // never mid-air while lying asleep
-        if s.activity.act == .kennel, s.activity.remaining <= 0, s.activity.phase == "inside" || s.activity.phase == "enter",
+        if s.activity.act == .kennel, s.activity.remaining <= 0, s.activity.kennel == .inside || s.activity.kennel == .enter,
            let k = s.objects.first(where: { $0.kind == .kennel }) {   // time's up: walk back out through the door first
-            s.activity.phase = "exit"; s.activity.destX = k.x + Self.kennelDoorOutside; s.activity.remaining = 1
+            s.activity.kennel = .exit; s.activity.destX = k.x + env.kennelDoorOutside; s.activity.remaining = 1
         }
+    }
+
+    /// The user is back (after being away, or after the Mac slept). Greeting is likelier for a few minutes, and if the
+    /// cursor isn't near the floor the dog says hello where it is: up from a light doze, sits facing you and wags.
+    public mutating func welcomeBack(env: Environment) {
+        s.greetBoostUntil = s.time + 180
+        guard env.cursorX == nil else { return }   // the cursor's near: it may come and greet you properly
+        let a = s.activity
+        if [.eat, .drink, .react, .greet].contains(a.act) || (a.act == .kennel && a.kennel != .door) { return }
+        if a.act == .sleep && s.needs.tiredness > 0.55 { return }   // fast asleep: lets you be
+        finish(); start(.sit, target: nil, env)
+        s.activity.front = true; s.activity.back = false
+        s.activity.remaining = rand(4...7)
+        s.wagUntil = s.time + rand(3...5)
+        if s.personality.affection > 0.5 { setEmote("♥", 2) }
+    }
+
+    /// Catches up on `gap` seconds of real time: a long gap (the app wasn't running) resumes from the save;
+    /// otherwise it's simulated in steps of at most 1 s so nothing is skipped.
+    public mutating func advance(by gap: Double, env: Environment) {
+        var gap = gap
+        if gap > 8 * 3600 { resume(afterOffline: gap); return }
+        while gap > 0 { let step = min(gap, 1); update(dt: step, env: env); gap -= step }
     }
 
     /// A click on the dog: a nudge it may ignore, never a command.
     public mutating func poke(env: Environment) {
         let a = s.activity
-        if a.act == .kennel && a.phase != "door" { return }   // can't be clicked while it's in its kennel
+        if a.act == .kennel && a.kennel != .door { return }   // can't be clicked while it's in its kennel
         if a.act == .sleep && a.destX == nil {
             if rand(0...1) < 0.25 + 0.5 * (1 - s.needs.tiredness) {
                 startle(env: env)   // jolted awake
@@ -138,6 +167,7 @@ public struct Brain: Sendable {
 
     /// Testing hook: start an act right now (e.g. "play" with "ball"). Not used by the dog itself.
     public mutating func debugStart(_ act: Act, target: String?, env: Environment) {
+        calm = env.reduceMotion
         s.attention = nil
         finish(); start(act, target: target, env)
         if act == .kennel, s.objects.contains(where: { $0.id == target }) { s.activity.running = true }
@@ -185,27 +215,27 @@ public struct Brain: Sendable {
         }
         pose.attention = s.attention
         if let c = s.carrying, let o = s.objects.first(where: { $0.id == c }), o.kind.isToy {
-            pose.holding = o.id == "tennis" ? "tennis" : o.kind.rawValue
+            pose.holding = o
             pose.toss = s.time < (s.tossUntil ?? 0)
         }
-        if a.act == .play, let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }) { pose.play = o.kind == .ball ? "chase" : "shake" }
-        if a.act == .kennel && a.phase != "door" {
+        if a.act == .play, let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }) { pose.play = o.kind == .ball ? .chase : .shake }
+        if a.act == .kennel && a.kennel != .door {
             pose.inKennel = true; pose.emote = nil
             if a.destX == nil { pose.anim = s.needs.tiredness > 0.3 ? .sleep : .sit }   // napping or sitting in its den
         }
         let asleep = (a.act == .sleep && a.destX == nil) || (pose.inKennel && pose.anim == .sleep)
-        if asleep { pose.twitch = s.time < s.twitchUntil; pose.sleepPos = s.sleepPos ?? "flat" }
+        if asleep { pose.twitch = s.time < s.twitchUntil; pose.sleepPos = s.sleepPos ?? .flat }
         if a.act == .sleep && a.destX == nil, let t = a.target, s.objects.first(where: { $0.id == t })?.kind == .bed { pose.inBed = t }
         if anim == .sit {
-            pose.front = a.front == true || a.act == .greet || s.attention == "head" || s.attention == "body"
+            pose.front = a.front == true || a.act == .greet || s.attention == .head || s.attention == .body
             pose.back = !pose.front && a.back == true
         }
-        if s.attention == "head" { pose.lookX = s.lastCursorX }
+        if s.attention == .head { pose.lookX = s.lastCursorX }
         if let at = s.fallAt {
             let t = s.time - at
-            pose.fall = s.fallKind == "trip" ? "trip" : t < 0.15 ? "trip" : t < 0.45 ? "roll" : t < 1.3 ? "sprawl" : t < 1.5 ? "up" : "sheepish"
+            pose.fall = s.fallKind == .trip ? .trip : t < 0.15 ? .trip : t < 0.45 ? .roll : t < 1.3 ? .sprawl : t < 1.5 ? .up : .sheepish
         }
-        if a.act == .groom && a.destX == nil { pose.groom = a.phase }
+        if a.act == .groom && a.destX == nil { pose.groom = a.groom }
         pose.wag = pose.fall == nil && anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
         return pose
     }
@@ -229,7 +259,7 @@ public struct Brain: Sendable {
         let p = s.personality
         s.needs.hunger += dt / (5 * 3600)
         s.needs.thirst += dt / (3 * 3600)
-        if a.act == .kennel && a.phase == "inside" && a.destX == nil {
+        if a.act == .kennel && a.kennel == .inside && a.destX == nil {
             s.needs.tiredness -= dt / (5 * 3600)   // resting in its den: a light nap
         } else if a.act == .sleep && a.destX == nil {
             s.needs.tiredness -= dt / (3 * 3600) * (1.2 - 0.6 * circ) // sleeps deeper/longer at night
@@ -262,15 +292,16 @@ public struct Brain: Sendable {
         func f(_ pref: Double) -> Double { exp(1.3 * pref) } // favourite ≈ 3.7×, disliked ≈ 0.3×; never certain
 
         // Sleep: tiredness × clock × laziness, boosted while you're away; per spot by preference.
-        let away = env.userIdle > 600 ? 1.8 : 1
+        let away = env.userIdle > Brain.awayAfter ? 1.8 : 1
         let night = 1 - 0.9 * circ // energetic acts fade at night
         let lastTarget = s.memory.last?.target
-        let sleepBase = pow(n.tiredness, 1.5) * (0.4 + circ) * (0.6 + 0.8 * p.laziness) * away * (n.tiredness < 0.2 * (1 - circ) ? 0.05 : 1) * 4 // at night it dozes off again easily
+        let sleepBase = (pow(n.tiredness, 1.5) * (0.4 + circ) * (0.6 + 0.8 * p.laziness) * away * (n.tiredness < 0.2 * (1 - circ) ? 0.05 : 1) * 4
+                         + 1.2 * max(0, circ - 0.7) / 0.3 * (0.5 + p.laziness))   // at night it dozes off again easily, rested or not
         for o in s.objects where o.kind.isSleepSpot { c.append(.init(act: .sleep, target: o.id, score: sleepBase * f(pref(o)))) }
         c.append(.init(act: .sleep, target: nil, score: sleepBase * f(floorPref)))
 
         if let k = s.objects.first(where: { $0.kind == .kennel }) {
-            let den = (0.15 + 0.35 * p.independence + 0.3 * p.laziness) * (0.3 + n.tiredness) * (env.userIdle > 600 ? 1.5 : 1) * (1 + 0.5 * circ)
+            let den = (0.15 + 0.35 * p.independence + 0.3 * p.laziness) * (0.3 + n.tiredness) * (env.userIdle > Brain.awayAfter ? 1.5 : 1) * (1 - 0.3 * circ)
             c.append(.init(act: .kennel, target: k.id, score: env.systemBusy ? 8 : den * 0.18 * f(pref(k))))
         }
         if let bowl = s.objects.first(where: { $0.kind == .foodBowl }) {
@@ -287,16 +318,18 @@ public struct Brain: Sendable {
         }
         let perObject = 1.5 / Double(max(1, s.objects.count))
         for o in s.objects {
-            c.append(.init(act: .sniff, target: o.id, score: (0.15 + 0.5 * p.curiosity) * (0.3 + 4 * novelty(o)) * perObject))
+            c.append(.init(act: .sniff, target: o.id, score: (0.15 + 0.5 * p.curiosity) * (0.3 + 4 * novelty(o)) * perObject * (1 - 0.6 * circ)))
         }
-        c.append(.init(act: .wander, target: nil, score: 0.6 * (0.4 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.6 * circ)))
-        c.append(.init(act: .idle, target: nil, score: 0.5 * (0.5 + p.laziness)))
-        c.append(.init(act: .sit, target: nil, score: 0.45))
-        c.append(.init(act: .lookAround, target: nil, score: 0.3 * (0.5 + p.curiosity)))
-        c.append(.init(act: .groom, target: nil, score: 0.2))
+        // Nights are calm: the awake pottering fades with the clock, so sleep wins.
+        let calmNight = 1 - 0.5 * circ
+        c.append(.init(act: .wander, target: nil, score: 0.6 * (0.4 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.85 * circ)))
+        c.append(.init(act: .idle, target: nil, score: 0.5 * (0.5 + p.laziness) * calmNight))
+        c.append(.init(act: .sit, target: nil, score: 0.45 * calmNight))
+        c.append(.init(act: .lookAround, target: nil, score: 0.3 * (0.5 + p.curiosity) * (1 - 0.6 * circ)))
+        c.append(.init(act: .groom, target: nil, score: 0.2 * calmNight))
         let justWoke = s.time - (s.lastDone[.sleep] ?? -1e9) < 20
         c.append(.init(act: .stretch, target: nil, score: justWoke ? 4 : 0.12))
-        c.append(.init(act: .zoomies, target: nil, score: 1.2 * p.energy * pow(1 - n.tiredness, 2) * n.boredom * night))
+        c.append(.init(act: .zoomies, target: nil, score: calm ? 0 : 1.2 * p.energy * pow(1 - n.tiredness, 2) * n.boredom * night))
         if env.cursorX != nil {
             let boost = s.time < s.greetBoostUntil ? 2.5 : 0.12
             c.append(.init(act: .greet, target: nil, score: boost * (0.3 + p.affection) * (1.2 - p.independence)))
@@ -348,12 +381,12 @@ public struct Brain: Sendable {
             a.destX = o?.x ?? rand(env.minX...env.maxX)
             chooseSleepPos()
         case .kennel:
-            if let o { a.destX = o.x + Self.kennelDoorOutside; a.phase = "door" }
+            if let o { a.destX = o.x + env.kennelDoorOutside; a.kennel = .door }
             chooseSleepPos()
         case .sit:
             orientSit(&a)
         case .groom:
-            a.phase = rand(0...1) < 0.6 ? "lick" : "scratch"   // licks a paw or scratches an ear with a hind foot
+            a.groom = rand(0...1) < 0.6 ? .lick : .scratch   // licks a paw or scratches an ear with a hind foot
         case .wander, .zoomies:
             a.destX = rand(env.minX...env.maxX)
             // An energetic, happy dog sometimes runs instead of strolling.
@@ -382,10 +415,10 @@ public struct Brain: Sendable {
             jump(height: 14 + 6 * s.personality.playfulness, length: 0.4)   // pounce on the ball
         }
         if a.act == .kennel, let k = s.objects.first(where: { $0.kind == .kennel }) {
-            switch a.phase {
-            case "door": a.phase = "enter"; a.running = false; a.destX = k.x + rand(Self.kennelInside)   // in through the doorway
-            case "enter": a.phase = "inside"
-            case "exit": a.remaining = 0
+            switch a.kennel {
+            case .door: a.kennel = .enter; a.running = false; a.destX = k.x + rand(env.kennelInside)   // in through the doorway
+            case .enter: a.kennel = .inside
+            case .exit: a.remaining = 0
             default: break
             }
         }
@@ -430,15 +463,15 @@ public struct Brain: Sendable {
             }
         case .sniff: s.needs.boredom -= dt / 200
         case .sleep:
-            if s.needs.tiredness <= 0.02 { a.remaining = 0 }
+            if s.needs.tiredness <= 0.02 && Self.sleepiness(hour: env.hour) < 0.6 { a.remaining = 0 }   // rested: up — except at night, when it dozes on
             dreamTick()
             if rand(0...1) < dt * 0.0025 { chooseSleepPos(); s.twitchUntil = s.time + 0.6 }   // resettles every few minutes
         case .lookAround: if rand(0...1) < dt * 0.6 { s.facing = -s.facing }
         case .sit: if rand(0...1) < dt * 0.04 { orientSit(&a) }   // shifts round now and then
-        case .groom: if rand(0...1) < dt * 0.12 { a.phase = a.phase == "lick" ? "scratch" : "lick" }   // moves on to another itch
+        case .groom: if rand(0...1) < dt * 0.12 { a.groom = a.groom == .lick ? .scratch : .lick }   // moves on to another itch
         case .kennel:
-            if a.phase == "inside", rand(0...1) < dt * 0.03, let k = s.objects.first(where: { $0.kind == .kennel }) {
-                a.destX = k.x + rand(Self.kennelInside)   // potters about inside
+            if a.kennel == .inside, rand(0...1) < dt * 0.03, let k = s.objects.first(where: { $0.kind == .kennel }) {
+                a.destX = k.x + rand(env.kennelInside)   // potters about inside
             }
             if s.needs.tiredness > 0.3 { dreamTick() }
         default: break
@@ -454,7 +487,7 @@ public struct Brain: Sendable {
         if a.act == .play, let t = a.target, s.objects.first(where: { $0.id == t })?.kind == .ball,
            rand(0...1) < 0.25 + 0.5 * s.personality.playfulness { s.pendingCarry = t }   // grabs the ball and trots off with it
         if a.act == .follow {
-            if s.attention == "follow" { s.attention = nil; s.attentionUntil = nil }
+            if s.attention == .follow { s.attention = nil; s.attentionUntil = nil }
             if rand(0...1) < 0.2 + 0.6 * s.personality.playfulness * mood { jump(height: 22 + 8 * s.personality.energy, length: 0.5) }   // pounce
         }
         var enjoyment: Double?
@@ -473,7 +506,7 @@ public struct Brain: Sendable {
                 s.learned[key] = min(1, max(-1, current + rate * (e - current)))
             }
         }
-        if a.act == .sleep, let pos = s.sleepPos {   // comfiest positions become favourites
+        if a.act == .sleep, let pos = s.sleepPos?.rawValue {   // comfiest positions become favourites
             let key = "pos:" + pos
             let e = (s.posTaste?[pos] ?? 0) + gauss() * 0.3
             let current = s.learned[key] ?? 0.3 * (s.posTaste?[pos] ?? 0)
@@ -495,10 +528,6 @@ public struct Brain: Sendable {
 
     func novelty(_ o: PetObject) -> Double { exp(-(s.time - o.addedAt) / (3 * 3600)) }
 
-    /// Kennel geometry in points from its centre (side-on kennel, doorway near its right end).
-    static let kennelDoorOutside = 88.0      // just clear of the cabin's open end (cabin is 99 pt wide, dog 72 pt)
-    static let kennelInside = -16.0 ... 0.0
-
     /// Every minute or few of sleep, a short dream: paws paddle, the tail tip and an ear twitch.
     mutating func dreamTick() {
         guard s.time >= (s.nextDream ?? s.activity.started + rand(20...90)) else { return }
@@ -509,7 +538,6 @@ public struct Brain: Sendable {
         s.twitchUntil = s.time + rand(1.0...2.5) * max(0.5, lively)
     }
 
-    static let sleepPositions = ["flat", "curl", "side", "belly"]
 
     /// Picks how to lie: weighted by its developing favourite (hidden taste + experience); belly-up only when relaxed.
     mutating func chooseSleepPos() {
@@ -520,16 +548,16 @@ public struct Brain: Sendable {
             let bias = ["flat": 0.0, "curl": 0.6 * p.independence - 0.2, "side": 0.5 * p.energy - 0.2,
                         "belly": 0.4 * p.laziness + 0.4 * p.affection - 0.4]
             var t: [String: Double] = [:]
-            for pos in Self.sleepPositions { t[pos] = min(1, max(-1, rand(-0.4...0.6) + (bias[pos] ?? 0))) }
+            for pos in SleepPos.allCases.map(\.rawValue) { t[pos] = min(1, max(-1, rand(-0.4...0.6) + (bias[pos] ?? 0))) }
             s.posTaste = t
         }
-        let w = Self.sleepPositions.map { p -> Double in
-            let pref = s.learned["pos:" + p] ?? 0.3 * (s.posTaste?[p] ?? 0)
-            return exp(1.3 * pref) * (p == "belly" ? 0.3 + mood : 1)
+        let w = SleepPos.allCases.map { p -> Double in
+            let pref = s.learned["pos:" + p.rawValue] ?? 0.3 * (s.posTaste?[p.rawValue] ?? 0)
+            return exp(1.3 * pref) * (p == .belly ? 0.3 + mood : 1)
         }
         var r = rand(0...w.reduce(0, +))
-        for (i, wi) in w.enumerated() { r -= wi; if r <= 0 { s.sleepPos = Self.sleepPositions[i]; return } }
-        s.sleepPos = "flat"
+        for (i, wi) in w.enumerated() { r -= wi; if r <= 0 { s.sleepPos = SleepPos.allCases[i]; return } }
+        s.sleepPos = .flat
     }
 
     /// Sits any way round: side-on (either direction), facing you, or facing away.
@@ -558,7 +586,7 @@ public struct Brain: Sendable {
     }
 
     mutating func fall(tumble: Bool) {
-        s.fallAt = s.time; s.fallKind = tumble ? "tumble" : "trip"
+        s.fallAt = s.time; s.fallKind = tumble ? .tumble : .trip
         s.fallSpeed = s.activity.act == .zoomies ? 120 : s.activity.running == true ? 90 : 35
         s.wagUntil = nil
     }
@@ -568,7 +596,7 @@ public struct Brain: Sendable {
 
     /// A jump layers on top of whatever it is doing; it never replaces the activity.
     mutating func jump(height: Double, length: Double) {
-        guard s.jumpAt == nil else { return }
+        guard s.jumpAt == nil, !calm else { return }
         // Standing jumps gather into a crouch first; on the move it springs straight off its stride.
         s.jumpAt = s.time + (s.activity.destX == nil ? Brain.jumpCrouch : 0); s.jumpLen = length; s.jumpHeight = height
     }
@@ -606,8 +634,8 @@ public struct Brain: Sendable {
     mutating func updateAttention(_ dt: Double, env: Environment) {
         let moved = env.cursorX.map { abs($0 - (s.lastCursorX ?? $0)) > 1 } ?? false
         s.lastCursorX = env.cursorX
-        if let until = s.attentionUntil, s.time > until || env.cursorX == nil, s.attention != "follow" { s.attention = nil; s.attentionUntil = nil }
-        if s.attention == "body", let cx = env.cursorX, s.activity.destX == nil { s.facing = cx >= s.x ? 1 : -1 }
+        if let until = s.attentionUntil, s.time > until || env.cursorX == nil, s.attention != .follow { s.attention = nil; s.attentionUntil = nil }
+        if s.attention == .body, let cx = env.cursorX, s.activity.destX == nil { s.facing = cx >= s.x ? 1 : -1 }
         guard moved, s.attention == nil, s.time >= (s.attentionCooldown ?? 0) else { return }
         let calm: Set<Act> = [.idle, .sit, .lookAround, .wander, .groom]
         guard calm.contains(s.activity.act) else { return }
@@ -621,11 +649,11 @@ public struct Brain: Sendable {
         let wFollow = (p.playfulness + p.affection + p.energy) * 0.7 * (1 - s.needs.tiredness) * mood * (recentlyFollowed ? 0.1 : 1)
         let r = rand(0...(wHead + wBody + wFollow))
         if r < wHead {
-            s.attention = "head"; s.attentionUntil = s.time + rand(1.5...4)
+            s.attention = .head; s.attentionUntil = s.time + rand(1.5...4)
         } else if r < wHead + wBody {
-            s.attention = "body"; s.attentionUntil = s.time + rand(3...8); setEmote("?", 1)
+            s.attention = .body; s.attentionUntil = s.time + rand(3...8); setEmote("?", 1)
         } else {
-            s.attention = "follow"; s.attentionUntil = s.time + 20; setEmote("!", 1)
+            s.attention = .follow; s.attentionUntil = s.time + 20; setEmote("!", 1)
             finish(); start(.follow, target: nil, env)
         }
     }
