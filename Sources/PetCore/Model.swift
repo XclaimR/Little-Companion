@@ -172,10 +172,13 @@ public struct Environment: Sendable {
     /// Kennel geometry in points from its centre, from the art: just clear of the open end, and where it can stand inside.
     public var kennelDoorOutside: Double
     public var kennelInside: ClosedRange<Double>
+    /// How far its mouth reaches ahead of its centre with the head down (from the art): where it stands to eat,
+    /// drink or sniff, so its mouth is over the middle of the bowl or toy and its paws stay clear of the rim.
+    public var mouthReach: Double
     public init(minX: Double, maxX: Double, hour: Double, userIdle: Double, cursorX: Double?, systemBusy: Bool = false,
-                reduceMotion: Bool = false, kennelDoorOutside: Double = 88, kennelInside: ClosedRange<Double> = -16...0) {
+                reduceMotion: Bool = false, kennelDoorOutside: Double = 88, kennelInside: ClosedRange<Double> = -16...0, mouthReach: Double = 28) {
         self.minX = minX; self.maxX = maxX; self.hour = hour; self.userIdle = userIdle; self.cursorX = cursorX; self.systemBusy = systemBusy
-        self.reduceMotion = reduceMotion; self.kennelDoorOutside = kennelDoorOutside; self.kennelInside = kennelInside
+        self.reduceMotion = reduceMotion; self.kennelDoorOutside = kennelDoorOutside; self.kennelInside = kennelInside; self.mouthReach = mouthReach
     }
 }
 

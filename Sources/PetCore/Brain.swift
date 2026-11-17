@@ -379,7 +379,9 @@ public struct Brain: Sendable {
         if act == .sleep { a.remaining *= 1 + 2 * Self.sleepiness(hour: env.hour) } // night sleeps run long
         let o = target.flatMap { id in s.objects.first { $0.id == id } }
         switch act {
-        case .eat, .drink, .sniff, .play:
+        case .eat, .drink, .sniff:
+            if let o { a.destX = o.x + (s.x < o.x ? -env.mouthReach : env.mouthReach) }   // mouth over the middle of it
+        case .play:
             if let o { a.destX = o.x + (s.x < o.x ? -24 : 24) } // stand beside it, facing it
             if act == .play, let o { a.running = abs(o.x - s.x) > 150 }   // runs over to a toy across the room
         case .carry:
