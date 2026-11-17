@@ -9,6 +9,7 @@ import QuartzCore
     let dogLayer = CALayer(), emoteLayer = CATextLayer(), debugLayer = CATextLayer(), ledgeLayer = CALayer()
     var objectLayers: [String: CALayer] = [:]
     var kennelFront: CALayer?
+    let zzzLayer = CALayer()   // floating z's while asleep, animated by Core Animation (no per-frame work)
     var bedRims: [String: CALayer] = [:]
     let screenW: CGFloat, screenH: CGFloat, floorY: CGFloat
     var brain: Brain
@@ -63,6 +64,7 @@ import QuartzCore
         root.addSublayer(ledgeLayer)
         root.addSublayer(dogLayer)
         root.addSublayer(emoteLayer)
+        setUpZzz(in: root)
         if debug {
             debugLayer.contentsScale = DogSprite.scale
             debugLayer.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -207,7 +209,7 @@ import QuartzCore
         let t = CACurrentMediaTime()
         let frame = spriteFrame(p, time: t)
         let origin = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
-        let emote = p.emote ?? ""
+        let rawEmote = p.emote ?? ""
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -220,6 +222,14 @@ import QuartzCore
             spriteKey = key
             dogLayer.contents = shadow ? DogSprite.silhouette(frame, facing: CGFloat(p.facing)) : DogSprite.image(frame, facing: CGFloat(p.facing))
         }
+        let snoozing = rawEmote == "z"   // asleep: floating z's instead of the static emote
+        if zzzLayer.isHidden == snoozing { zzzLayer.isHidden = !snoozing }
+        if snoozing {
+            let headX = r.midX + CGFloat(p.facing) * 18
+            let headTop = r.minY + 25 * DogSprite.pointsPerPixel   // lying down: rise from just above the head
+            zzzLayer.position = CGPoint(x: headX, y: screenH - headTop)
+        }
+        let emote = snoozing ? "" : rawEmote
         if emote != emoteText { emoteText = emote; emoteLayer.string = emote }
         if !emote.isEmpty {   // above the head, which sits toward the facing side
             let headTop: CGFloat = p.anim == .sleep ? 21 : 5   // art rows
@@ -273,6 +283,41 @@ import QuartzCore
         if front.position != back.position { front.position = back.position }
         let z: CGFloat = inKennel ? 1.5 : -0.5
         if front.zPosition != z { front.zPosition = z }
+    }
+
+    /// Three z's that float up from the head, drift, grow and fade, staggered so there's always one rising.
+    func setUpZzz(in root: CALayer) {
+        zzzLayer.zPosition = 3
+        zzzLayer.isHidden = true
+        root.addSublayer(zzzLayer)
+        let start = CACurrentMediaTime()
+        for (i, (letter, size)) in [("z", 11.0), ("z", 13.0), ("Z", 15.0)].enumerated() {
+            let z = CATextLayer()
+            z.string = letter
+            z.contentsScale = DogSprite.scale
+            z.font = NSFont.systemFont(ofSize: size, weight: .heavy)
+            z.fontSize = size
+            z.alignmentMode = .center
+            z.foregroundColor = DogSprite.rgb(0.42, 0.33, 0.55)
+            z.bounds = CGRect(x: 0, y: 0, width: 20, height: 20)
+            z.position = .zero
+            z.opacity = 0
+            let rise = CAKeyframeAnimation(keyPath: "position")
+            rise.values = [CGPoint(x: 0, y: 0), CGPoint(x: 7, y: 10), CGPoint(x: 2, y: 20), CGPoint(x: 10, y: 30)].map { NSValue(point: $0) }
+            let fade = CAKeyframeAnimation(keyPath: "opacity")
+            fade.values = [0, 1, 1, 0]
+            fade.keyTimes = [0, 0.15, 0.7, 1]
+            let grow = CABasicAnimation(keyPath: "transform.scale")
+            grow.fromValue = 0.6; grow.toValue = 1.15
+            let group = CAAnimationGroup()
+            group.animations = [rise, fade, grow]
+            group.duration = 2.7
+            group.repeatCount = .infinity
+            group.beginTime = start + Double(i) * 0.9
+            group.fillMode = .backwards
+            z.add(group, forKey: "float")
+            zzzLayer.addSublayer(z)
+        }
     }
 
     /// The bed's front rim, drawn over the dog while it lies in that bed so it sits *in* the bed.
