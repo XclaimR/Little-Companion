@@ -1,0 +1,41 @@
+#!/bin/sh
+# Security gate before anything reaches GitHub: a quick local secret scan, then the
+# security-reviewer agent (.claude/agents/security-reviewer.md) reads the staged diff.
+# Enable once per clone:   git config core.hooksPath .githooks
+# Skip once (you take the risk):   SKIP_SECURITY_REVIEW=1 git commit ...
+
+[ "$SKIP_SECURITY_REVIEW" = "1" ] && { echo "security review: SKIPPED (SKIP_SECURITY_REVIEW=1)" >&2; exit 0; }
+git diff --cached --quiet && exit 0
+
+# 1. Instant, free checks on added lines and file names.
+added=$(git diff --cached --no-color -U0 | grep '^+' | grep -v '^+++')
+if printf '%s\n' "$added" | grep -nE '(AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|xox[abpr]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|secret|password|passwd|token)["'"'"' ]*[:=] *["'"'"'][^"'"'"']{8,})' >/dev/null; then
+  echo "security review: BLOCKED — an added line looks like a secret (key, token or password)." >&2
+  echo "Remove it from the staged changes (git diff --cached) and commit again." >&2
+  exit 1
+fi
+bad=$(git diff --cached --name-only --diff-filter=AM | grep -E '(^|/)(\.env[^/]*|state[^/]*\.json|[^/]*\.(p12|pem|key|mobileprovision))$|(^|/)\.DS_Store$|^(\.build|tools/art/build)/')
+if [ -n "$bad" ]; then
+  echo "security review: BLOCKED — these files should not be committed:" >&2
+  echo "$bad" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+# 2. The agent's review. If it can't run (no CLI, offline, out of usage), say so loudly and let the commit through.
+if ! command -v claude >/dev/null 2>&1; then
+  echo "security review: WARNING — claude CLI not found; only the quick secret scan ran." >&2
+  exit 0
+fi
+echo "security review: the security-reviewer agent is reading the staged changes…" >&2
+out=$( { git diff --cached --stat; echo; git diff --cached --no-color; } | \
+  claude -p --agent security-reviewer --allowedTools "Read" "Grep" "Glob" "Bash(git diff:*)" "Bash(git show:*)" "Bash(git status:*)" "Bash(git log:*)" \
+  "Review the staged diff on stdin for security and privacy risks before it is committed to a public GitHub repo. Follow your instructions and end with the VERDICT line." 2>&1)
+status=$?
+echo "$out" >&2
+verdict=$(printf '%s\n' "$out" | grep -E '^VERDICT: (PASS|BLOCK)$' | tail -1)
+if [ $status -ne 0 ] || [ -z "$verdict" ]; then
+  echo "security review: WARNING — the agent did not give a verdict (exit $status); only the quick secret scan ran." >&2
+  exit 0
+fi
+[ "$verdict" = "VERDICT: BLOCK" ] && { echo "security review: BLOCKED — fix the findings above, or SKIP_SECURITY_REVIEW=1 to override." >&2; exit 1; }
+exit 0

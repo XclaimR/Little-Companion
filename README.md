@@ -18,3 +18,16 @@ swift run -c release simrun 4 24 1  # 4 dogs × 24 simulated hours
 ```
 
 See [DESIGN.md](DESIGN.md) for the design, behaviour engine and roadmap.
+
+## Security check before commits
+
+Every commit runs `.githooks/pre-commit`. Turn it on once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+1. An instant local scan blocks anything that looks like a key, token or password, and files that should never be public (`.env`, keys, save files, build output).
+2. The `security-reviewer` agent (`.claude/agents/security-reviewer.md`) then reads the staged diff for secrets, personal data, network calls, shell execution and anything that weakens the app's no-intrusion rules. It blocks on serious findings and lists warnings.
+
+Notes: step 2 sends the staged diff to Claude, so it needs the `claude` CLI and usage. If it can't run, the commit goes through with only step 1, and you get a warning. To skip it once: `SKIP_SECURITY_REVIEW=1 git commit …`.
