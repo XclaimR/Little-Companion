@@ -31,6 +31,14 @@ def wag(p, w):
 frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB', 'look', 'bow') for w in (-1, 1)]   # 55-70: tail wag A/B for each awake pose
 frames += [frame(p) for p in ('crouch', 'runJU', 'runJD')]   # 71-73: jump crouch, take-off, coming down
 frames += [frame('trip'), sleepers.belly(awake=True), sleepers.side(awake=True)]   # 74-76: trip, tumble roll, sprawled after a tumble
+def lick(p):
+    g = hd2.compose('pudding', p)
+    a = hd2.LAST_ANCHORS
+    x, y = int(a['mx'] + a['mrx'] - 2), int(a['my'] + 2)    # tongue out at the front of the mouth, onto the paw
+    for (dx, dy) in ((0, 0), (1, 0), (0, 1)) if p == 'lickA' else ((0, 0), (1, 0), (1, 1), (0, 1)):
+        g[y + dy][x + dx] = '#e8798c'
+    return g
+frames += [lick('lickA'), lick('lickB'), frame('scratchA'), frame('scratchB')]   # 77-80: licking a paw, scratching an ear
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):

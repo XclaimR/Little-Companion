@@ -176,5 +176,6 @@ public struct Pose: Sendable, Equatable {
     public var holding: String? = nil       // toy art in its mouth: "ball", "tennis", "plush" or "rope"
     public var toss = false                 // flinging the held toy up
     public var wag = false                  // tail wagging
+    public var groom: String? = nil         // "lick" (a front paw) or "scratch" (an ear, with a hind foot)
     public var fall: String? = nil          // "trip", "roll", "sprawl", "up", "sheepish": where it is in a stumble
 }

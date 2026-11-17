@@ -205,6 +205,7 @@ public struct Brain: Sendable {
             let t = s.time - at
             pose.fall = s.fallKind == "trip" ? "trip" : t < 0.15 ? "trip" : t < 0.45 ? "roll" : t < 1.3 ? "sprawl" : t < 1.5 ? "up" : "sheepish"
         }
+        if a.act == .groom && a.destX == nil { pose.groom = a.phase }
         pose.wag = pose.fall == nil && anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
         return pose
     }
@@ -351,6 +352,8 @@ public struct Brain: Sendable {
             chooseSleepPos()
         case .sit:
             orientSit(&a)
+        case .groom:
+            a.phase = rand(0...1) < 0.6 ? "lick" : "scratch"   // licks a paw or scratches an ear with a hind foot
         case .wander, .zoomies:
             a.destX = rand(env.minX...env.maxX)
             // An energetic, happy dog sometimes runs instead of strolling.
@@ -432,6 +435,7 @@ public struct Brain: Sendable {
             if rand(0...1) < dt * 0.0025 { chooseSleepPos(); s.twitchUntil = s.time + 0.6 }   // resettles every few minutes
         case .lookAround: if rand(0...1) < dt * 0.6 { s.facing = -s.facing }
         case .sit: if rand(0...1) < dt * 0.04 { orientSit(&a) }   // shifts round now and then
+        case .groom: if rand(0...1) < dt * 0.12 { a.phase = a.phase == "lick" ? "scratch" : "lick" }   // moves on to another itch
         case .kennel:
             if a.phase == "inside", rand(0...1) < dt * 0.03, let k = s.objects.first(where: { $0.kind == .kennel }) {
                 a.destX = k.x + rand(Self.kennelInside)   // potters about inside

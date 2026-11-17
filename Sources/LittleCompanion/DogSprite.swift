@@ -7,7 +7,7 @@ enum DogSprite {
     enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch
         case wagStandA = 55, wagStandB, wagSitA, wagSitB, wagFrontA, wagFrontB, wagBackA, wagBackB,   // after the 32 baked toy frames
              wagWalkA1, wagWalkA2, wagWalkB1, wagWalkB2, wagLookA, wagLookB, wagBowA, wagBowB,
-             jumpCrouch, jumpUp, jumpDown, trip, tumbleRoll, tumbleSprawl
+             jumpCrouch, jumpUp, jumpDown, trip, tumbleRoll, tumbleSprawl, lickA, lickB, scratchA, scratchB
 
         /// The same pose with the tail wagging, flicking between two frames at `t`; nil if this pose has no wag art.
         func wagging(_ t: Double) -> Frame? {

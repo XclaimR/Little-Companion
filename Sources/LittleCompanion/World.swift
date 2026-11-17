@@ -102,7 +102,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .zoomies, nil), (12, .greet, nil), (20, .sit, nil), (28, .sit, nil), (36, .wander, nil), (44, .play, "ball"), (55, .carry, "rope")]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .zoomies, nil), (12, .groom, nil), (26, .greet, nil), (32, .sit, nil), (40, .wander, nil), (48, .play, "ball"), (59, .carry, "rope")]
             for (at, tumble) in [(6.0, true), (9.5, false)] {   // mid-zoomies: one tumble, one trip
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.brain.debugFall(tumble: tumble) } }
             }
@@ -227,7 +227,12 @@ import QuartzCore
         case .walk: return Int(p.x / 10) % 2 == 0 ? .walkA : .walkB
         case .run: return Int(p.x / 16) % 2 == 0 ? .runA : .runB
         case .zoom: return Int(p.x / 20) % 2 == 0 ? .zoomA : .zoomB
-        case .sit: return p.front ? .sitFront : p.back ? .sitBack : .sit
+        case .sit:
+            if p.groom == "lick" { return Int(t * 3) % 2 == 0 ? .lickA : .lickB }   // steady licks
+            if p.groom == "scratch" {   // fast kicking in bursts, then a pause
+                return t.truncatingRemainder(dividingBy: 1.6) < 1 && Int(t * 12) % 2 == 0 ? .scratchB : .scratchA
+            }
+            return p.front ? .sitFront : p.back ? .sitBack : .sit
         case .sleep:
             let dreaming = p.twitch && Int(t * 6) % 2 == 0   // each position has its own dream twitch
             switch p.sleepPos {

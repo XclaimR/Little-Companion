@@ -100,3 +100,22 @@ import Testing
     }
     #expect(stages == ["trip", "roll", "sprawl", "up", "sheepish", "-"])
 }
+
+/// Grooming is visible: it licks a paw or scratches an ear, and over a long groom switches between them.
+@Test func groomingLicksAndScratches() {
+    var seen = Set<String>()
+    for seed in 1...6 {
+        var b = Brain(seed: UInt64(seed))
+        b.s.objects = defaultObjects(width: 1400); b.s.x = 500
+        let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil)
+        b.debugStart(.groom, target: nil, env: env)
+        for _ in 0..<60 {
+            b.update(dt: 0.1, env: env)
+            guard b.s.activity.act == .groom else { break }
+            let p = b.pose
+            #expect(p.anim == .sit && p.groom != nil)
+            if let g = p.groom { seen.insert(g) }
+        }
+    }
+    #expect(seen == ["lick", "scratch"])
+}

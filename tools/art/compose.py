@@ -126,9 +126,12 @@ def compose(breed, pose):
         sleg('legBN', bx, top, bx - reach, paw=-1)
         sleg('legFN', fx, top - .5, fx + reach, paw=1)
         A.update(cx=cx, cy=cy, L=L, ry=ry, chx=chx, belly=(cx - L + 6, cx + L - 4, cy + ry - 1.6), zoom=zoom)
-    elif pose == 'sit':
+    elif pose in ('sit', 'lickA', 'lickB', 'scratchA', 'scratchB'):
+        lick, scratch = pose.startswith('lick'), pose.startswith('scratch')
         cx = 19
         hx, hy = cx + 10, 10.5
+        if lick: hx, hy = cx + 12.5, 16 + (1 if pose == 'lickB' else 0)       # head bowed to the raised paw, bobbing as it licks
+        if scratch: hx, hy = cx + 9.5, 12.5                                 # head tipped toward the scratching foot
         A['tail'] = (cx - 6.5, 25)
         leg('farfront', cx + 10.5, 21, FLOOR - 2, w=3, far=True)
         ell('haunch', cx - 1.5, 27.5, 7.5, 6)
@@ -137,10 +140,30 @@ def compose(breed, pose):
         chx = cx + 7.5
         poly('neck', [(hx - 6.5, hy + .5), (hx + 1, hy - 1.5), (chx + 4, 21), (chx - 5, 20)], (chx, 15, 6, 7))
         ell('chest', chx, 20.5, 4.4, 6.5)
-        leg('legFN', cx + 6.5, 22, FLOOR - 2, paw=1)
-        for y in (32, 33):
-            for x in range(int(cx - 5), int(cx + 3)): put(x, y, 'pawB')
-        zones['pawB'] = ('leg', cx - 5, 8, False)
+        if lick:   # near front leg lifted and bent, paw held up under the chin
+            zones['legFN'] = ('leg', cx + 6.5, 4, False)
+            for y in range(23, 28):
+                for x in range(int(cx + 6.5 + (27 - y) * .8), int(cx + 10.5 + (27 - y) * .8)): put(x, y, 'legFN')
+            for y in range(21, 24):
+                for x in range(int(cx + 11), int(cx + 17)): put(x, y, 'legFN', 'c')   # white paw up at the mouth
+        else:
+            leg('legFN', cx + 6.5, 22, FLOOR - 2, paw=1)
+        if scratch:   # near hind leg swung up to the ear, foot kicking (A/B: two kick positions)
+            k = 0 if pose == 'scratchA' else 2
+            zones['legBN'] = ('leg', cx - 1, 4, False)
+            y0 = int(hy + 4 + k)
+            for y in range(y0, 30):   # dark against the body so the raised leg reads, outlined on its front edge
+                t = (y - y0) / (30 - y0)
+                xs = int((hx - 10) + (cx - 4 - (hx - 10)) * t)
+                put(xs - 1, y, 'legBN', 'o')
+                for x in range(xs, xs + 3): put(x, y, 'legBN', 'd')
+                put(xs + 3, y, 'legBN', 'o')
+            for y in range(int(hy + 1 + k), int(hy + 4 + k)):
+                for x in range(int(hx - 12), int(hx - 7)): put(x, y, 'legBN', 'c')   # white foot behind the ear
+        else:
+            for y in (32, 33):
+                for x in range(int(cx - 5), int(cx + 3)): put(x, y, 'pawB')
+            zones['pawB'] = ('leg', cx - 5, 8, False)
         A.update(cx=cx + 4, cy=21, L=5.5, ry=8.5, chx=chx, belly=None)
     elif pose in ('sleep', 'sleepT'):
         cx = 20 - (L - 13) * 0.6
