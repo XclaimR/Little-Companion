@@ -4,11 +4,12 @@
 # Preview: python3 bird_home.py -> build/bird_home_preview.png (with Mango posed on each perch).
 import json, math, os
 
-TW, TH, CX = 64, 84, 32                     # tree: width, height, trunk centre column (dx 0)
-BRANCHES = [(-1, 30, 44), (1, 23, 40), (-1, 30, 64), (1, 25, 66)]   # side, reach (px from the trunk centre), top height
-HOUSE = dict(left=-9, right=9, bottom=46, top=62, roof=68)          # birdhouse on the trunk, about two-thirds up
-ENTRANCE = (0, 54, 3.3)                                              # dx, h, radius: the round doorway (its shadow shows here)
-PEG = 48                                                             # the little perch under the doorway
+TW, TH, CX = 64, 92, 32                     # tree: width, height, trunk centre column (dx 0)
+BRANCHES = [(-1, 30, 44), (1, 27, 40), (-1, 31, 64), (1, 28, 66)]   # side, reach (px from the trunk centre), top height
+HOUSE = dict(left=-15, right=15, bottom=46, top=64, roof=75)         # the cottage birdhouse on the trunk, bird-sized
+ENTRANCE = (-7, 54, 4.2)                                             # dx, h, radius: the round doorway
+PEG = 47                                                             # the little perch under the doorway
+WINDOW = (3, 11, 50, 60)                                             # dx0, dx1, h0, h1: the curtained window (the bird's shadow and the evening glow show here)
 SWING = (-19, 41, 10)                                                # dx, top of the ropes (just under b0), seat top height
 BELL = (20, 63, 59)                                                  # dx, string top (under b3), bell centre height
 
@@ -58,21 +59,45 @@ def tree():
             if g[y][x] == 'L':
                 if y + 1 < TH and g[y + 1][x] is None or y > 15 or (x * 3 + y * 7) % 11 == 0 and y > 6: g[y][x] = 'D'   # shade under the clumps
                 elif y == 0 or g[y - 1][x] is None or (x * 5 + y * 3) % 13 == 0 and y < 11: g[y][x] = 'l'           # lit tops, glints of leaves
-    # birdhouse: a little wooden box with a red roof, round doorway and a peg
+    # the cottage birdhouse: plank walls, a pitched red roof, a round door with a peg, a name plate,
+    # and a curtained window with a flower box (lit inside: the bird's shadow and the evening glow show there)
     L, R = CX + HOUSE['left'], CX + HOUSE['right']
     for y in range(row(HOUSE['top']), row(HOUSE['bottom']) + 1):
-        for x in range(L, R): g[y][x] = 'W' if x == R - 1 or y == row(HOUSE['bottom']) else 'w' if (y - row(HOUSE['top'])) % 5 else 'W'
+        for x in range(L, R + 1):
+            g[y][x] = 'W' if x == R or y == row(HOUSE['bottom']) or (y - row(HOUSE['top'])) % 4 == 3 else 'w'
         g[y][L] = 'h'
-    for i, y in enumerate(range(row(HOUSE['roof']), row(HOUSE['top']) + 1)):
-        half = 2 + i * 2
-        for x in range(CX - half, CX + half): g[y][x] = 'R' if (x + i) % 4 == 0 else 'r'
-        g[y][CX - half] = 'T'
+    base, peak = row(HOUSE['top']), row(HOUSE['roof'])
+    for i, y in enumerate(range(peak, base + 1)):
+        half = 1 + (HOUSE['right'] + 3 - 1) * i / max(1, base - peak)
+        for x in range(int(CX - half), int(CX + half) + 1): g[y][x] = 'R' if y == base else 'T' if x < CX - half + 2 else 'r'
     dx, h, rad = ENTRANCE
     for y in range(TH):
         for x in range(TW):
-            if math.hypot(x + .5 - (CX + dx), y + .5 - row(h) + .5) <= rad: g[y][x] = 'i'   # lit inside (the bird's shadow is drawn over it)
-    for x in range(CX - 1, CX + 4): g[row(PEG)][x] = 'k'
+            if math.hypot(x + .5 - (CX + dx), y + .5 - row(h) + .5) <= rad: g[y][x] = 'd'   # dark doorway
+    for x in range(CX + dx - 3, CX + dx + 4): g[row(PEG)][x] = 'k'
+    wx0, wx1, wy0, wy1 = CX + WINDOW[0], CX + WINDOW[1], row(WINDOW[3]), row(WINDOW[2])
+    for y in range(wy0, wy1 + 1):
+        for x in range(wx0, wx1 + 1): g[y][x] = 'i'
+    for y in range(wy0, wy1 + 1): g[y][(wx0 + wx1) // 2] = 'W'                     # window bars
+    for x in range(wx0, wx1 + 1): g[(wy0 + wy1) // 2][x] = 'W'
+    for k in range(4):                                                              # curtains, tied back
+        for y in range(wy0, wy0 + 4 - k): g[y][wx0 + k] = 'c'; g[y][wx1 - k] = 'c'
+    for x in range(wx0 - 1, wx1 + 2): g[wy1 + 1][x] = 'W'; g[wy1 + 2][x] = 'W'      # flower box
+    for x in range(wx0, wx1 + 1, 3): g[wy1][x] = 'f'; g[wy1][min(wx1, x + 1)] = 'L'
+    for x in range(L + 3, CX + dx + 4): g[row(61)][x] = 'p'                         # name plate over the door
+    for x in range(L + 4, CX + dx + 3, 2): g[row(61)][x] = 'W'
     return outline(g)
+
+def window_glow():
+    wx0, wx1, wy0, wy1 = CX + WINDOW[0], CX + WINDOW[1], row(WINDOW[3]), row(WINDOW[2])
+    g = blank(wx1 - wx0 + 1, wy1 - wy0 + 1)
+    for y in range(wy1 - wy0 + 1):
+        for x in range(wx1 - wx0 + 1): g[y][x] = 'g' if (y + x) % 5 else 'G'
+    for y in range(len(g)): g[y][(wx0 + wx1) // 2 - wx0] = 'W'
+    for x in range(len(g[0])): g[(wy0 + wy1) // 2 - wy0][x] = 'W'
+    for k in range(4):
+        for y in range(4 - k): g[y][k] = 'c'; g[y][len(g[0]) - 1 - k] = 'c'
+    return g
 
 def swing():
     dx, top, seat = SWING
@@ -104,14 +129,16 @@ def dish(fill):
 
 KEYS = {
     'tree': dict(o='kennel-outline', b='tree-bark', B='tree-barkLight', k='tree-barkDark', L='plant-leaf', l='plant-leafLight', D='tree-leafDark',
-                 w='kennel-wood', W='kennel-woodDark', h='kennel-woodLight', r='kennel-roof', R='kennel-roofDark', T='kennel-roofLight', i='kennel-plate'),
+                 w='kennel-wood', W='kennel-woodDark', h='kennel-woodLight', r='kennel-roof', R='kennel-roofDark', T='kennel-roofLight', i='kennel-plate',
+                 d='kennel-doorDeep', c='window-curtain', f='window-curtainDark', p='kennel-plate'),
+    'houseGlow': dict(g='tree-glow', G='tree-glowDeep', W='kennel-woodDark', c='window-curtain'),
     'swing': dict(o='kennel-outline', c='rope-C', w='kennel-woodLight', W='kennel-woodDark'),
     'bell': dict(o='tree-bellOutline', c='rope-C', y='biscuit-tag', Y='pepper-collardark', l='tree-bellShine'),
     'seedDish': dict(o='foodBowl-o', s='tree-seed', S='tree-seedDark', h='tree-seedHusk', p='foodBowl-B', P='foodBowl-R'),
     'waterDish': dict(o='waterBowl-o', s='waterBowl-W', S='waterBowl-W', h='waterBowl-w', p='waterBowl-B', P='waterBowl-w'),
 }
 def grids():
-    return {'tree': tree(), 'swing': swing(), 'bell': bell(), 'seedDish': dish('sSh'), 'waterDish': dish('sSh')}
+    return {'tree': tree(), 'houseGlow': window_glow(), 'swing': swing(), 'bell': bell(), 'seedDish': dish('sSh'), 'waterDish': dish('sSh')}
 
 if __name__ == '__main__':
     import bird_sheet
@@ -137,7 +164,7 @@ if __name__ == '__main__':
     blit(G['seedDish'], KEYS['seedDish'], tx - 75 - 8, floor)
     blit(G['waterDish'], KEYS['waterDish'], tx - 51 - 8, floor)
     frames = dict(bird_sheet.FRAMES)
-    for name, dx, h in (('idle', -20, 0), ('swing', SWING[0], SWING[2]), ('bellA', 12, 40), ('nap', -20, 64), ('lookBack', 15, 66), ('front', -100, 0)):
+    for name, dx, h in (('idle', -20, 0), ('swing', SWING[0], SWING[2]), ('bellA', 19, 40), ('nap', -23, 64), ('lookBack', 21, 66), ('front', -100, 0)):
         blit(frames[name](), None, tx + dx - 16, floor - h + 1, rgb=bird_sheet.rgb)
     os.makedirs(here + '/build', exist_ok=True)
     bird_sheet.write_png(here + '/build/bird_home_preview.png', img, W * S, H * S, alpha=False)

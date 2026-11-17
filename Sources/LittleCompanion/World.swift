@@ -10,7 +10,8 @@ import QuartzCore
     var objectLayers: [String: CALayer] = [:]
     var objectArt: [String: String] = [:]   // which picture each object shows (the bowls change)
     var kennelFront: CALayer?
-    var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse doorway
+    var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse window and door
+    var glowLayer: CALayer?, houseEnteredAt: CFTimeInterval?             // the birdhouse window's evening lamp
     var windows: [Win] = [], windowsAt: CFTimeInterval = 0              // other apps' windows, polled for a bird
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
     var bedRims: [String: CALayer] = [:]
@@ -176,8 +177,8 @@ import QuartzCore
         dogLayer.setAffineTransform(.identity)
         dogLayer.bounds = CGRect(origin: .zero, size: DogSprite.size)
         if wasBird != DogSprite.isBird {   // another species: rebuild the home's layers
-            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
-            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil
+            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer, glowLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
+            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil; glowLayer = nil
         }
         render()
     }

@@ -108,7 +108,7 @@ extension World {
         let snoozing = rawEmote == "z"
         if zzzLayer.isHidden == snoozing { zzzLayer.isHidden = !snoozing }
         if snoozing {   // from the birdhouse doorway, or just above its head on a branch
-            zzzLayer.position = p.inKennel ? CGPoint(x: treeX + 6, y: screenH - (floorY - 58 * pp)) : CGPoint(x: r.midX + CGFloat(p.facing) * 6, y: screenH - (r.minY + 8 * pp))
+            zzzLayer.position = p.inKennel ? CGPoint(x: treeX + CGFloat(Tree.entrance.dx), y: screenH - (floorY - CGFloat(Tree.entrance.h) - 6 * pp)) : CGPoint(x: r.midX + CGFloat(p.facing) * 6, y: screenH - (r.minY + 8 * pp))
         }
         let emote = snoozing || p.inKennel ? "" : rawEmote
         if emote != emoteText { emoteText = emote; emoteLayer.string = emote }
@@ -118,8 +118,29 @@ extension World {
         updateHitTest()
     }
 
-    /// In the birdhouse: its soft shadow shows through the round doorway (the rest of it is behind the walls).
+    /// In the birdhouse: its soft shadow shows through the curtained window and the round door (the rest of it is
+    /// behind the walls). In the evening the window glows warm while it settles in, and the lamp goes out once it's asleep.
     func renderBirdhouseShadow(_ p: Pose) {
+        let now = CACurrentMediaTime()
+        if p.inKennel { houseEnteredAt = houseEnteredAt ?? now } else { houseEnteredAt = nil }
+        let win = Tree.window
+        let winRect = CGRect(x: treeX + CGFloat(win.dx0), y: floorY - CGFloat(win.h1), width: CGFloat(win.dx1 - win.dx0), height: CGFloat(win.h1 - win.h0))   // top-left coordinates
+        // the lamp
+        let glow = glowLayer ?? {
+            let (img, _) = ObjectSprite.image(id: "houseGlow", kind: "houseGlow")
+            let l = CALayer()
+            l.contents = img; l.anchorPoint = .zero; l.magnificationFilter = .nearest; l.zPosition = 0.45
+            panel.contentView!.layer!.addSublayer(l)
+            glowLayer = l
+            return l
+        }()
+        let hour = Double(Calendar.current.component(.hour, from: Date()))
+        let evening = hour >= 18 || hour < 6
+        let lampOn = p.inKennel && evening && (p.anim != .sleep || now - (houseEnteredAt ?? now) < 90)   // settling in, then lights out
+        if glow.isHidden == lampOn { glow.isHidden = !lampOn }
+        glow.bounds = CGRect(origin: .zero, size: winRect.size)
+        glow.position = CGPoint(x: winRect.minX.rounded(), y: (screenH - winRect.maxY).rounded())
+        // the shadow
         let hole = holeLayer ?? {
             let l = CALayer()
             l.anchorPoint = .zero; l.magnificationFilter = .nearest; l.zPosition = 0.5
@@ -133,12 +154,16 @@ extension World {
         if hole.isHidden == p.inKennel { hole.isHidden = !p.inKennel }
         guard p.inKennel else { return }
         let size = DogSprite.size
-        let doorY = floorY - CGFloat(Tree.entrance.h)       // the doorway's centre, top-left coordinates
-        let r = CGRect(x: treeX - size.width / 2, y: doorY + 12 * pp - size.height + DogSprite.footRows * pp, width: size.width, height: size.height)   // its middle behind the doorway
+        let feet = floorY - 46 * pp                          // standing on the birdhouse floor
+        let r = CGRect(x: treeX + 2 * pp - size.width / 2, y: feet - size.height + DogSprite.footRows * pp, width: size.width, height: size.height)
         hole.position = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
         hole.contents = DogSprite.silhouette(frameIndex, facing: CGFloat(p.facing))
-        let c = CGPoint(x: treeX - r.minX, y: r.maxY - doorY), rad = 3.3 * pp
-        (hole.mask as? CAShapeLayer)?.path = CGPath(ellipseIn: CGRect(x: c.x - rad, y: c.y - rad, width: rad * 2, height: rad * 2), transform: nil)
+        // mask in the layer's own (bottom-left) coordinates: the window panes and the round door
+        let path = CGMutablePath()
+        path.addRect(CGRect(x: winRect.minX - r.minX, y: r.maxY - winRect.maxY, width: winRect.width, height: winRect.height))
+        let doorX = treeX + CGFloat(Tree.entrance.dx) - r.minX, doorY = r.maxY - (floorY - CGFloat(Tree.entrance.h)), rad = 4.2 * pp
+        path.addEllipse(in: CGRect(x: doorX - rad, y: doorY - rad, width: rad * 2, height: rad * 2))
+        (hole.mask as? CAShapeLayer)?.path = path
     }
 
     /// The swing (under branch 0) and the bell (under branch 3) hang from their tops and sway when used.
