@@ -8,6 +8,8 @@ import QuartzCore
     let panel: DesktopPanel
     let dogLayer = CALayer(), emoteLayer = CATextLayer(), debugLayer = CATextLayer(), ledgeLayer = CALayer()
     var objectLayers: [String: CALayer] = [:]
+    var kennelFront: CALayer?
+    var bedRims: [String: CALayer] = [:]
     let screenW: CGFloat, screenH: CGFloat, floorY: CGFloat
     var brain: Brain
     var last = CACurrentMediaTime()
@@ -31,6 +33,15 @@ import QuartzCore
         }
         if !brain.s.objects.contains(where: { $0.kind == .kennel }) {
             brain.s.objects.insert(PetObject(id: "kennel", kind: .kennel, x: 60), at: 0)
+        }
+        // Keep the bed, bowls and toys clear of the kennel (older saves put them where the kennel now stands).
+        if let k = brain.s.objects.first(where: { $0.kind == .kennel }) {
+            var cursor = k.x + Double(ObjectSprite.image(id: k.id, kind: "kennel").1.width) / 2 + 8
+            for o in brain.s.objects.filter({ $0.kind != .kennel }).sorted(by: { $0.x < $1.x }) where o.x < cursor + 200 {
+                let half = Double(ObjectSprite.image(id: o.id, kind: o.kind.rawValue).1.width) / 2
+                if o.x - half < cursor, let i = brain.s.objects.firstIndex(where: { $0.id == o.id }) { brain.s.objects[i].x = cursor + half }
+                cursor = max(cursor, (brain.s.objects.first { $0.id == o.id }?.x ?? o.x) + half + 8)
+            }
         }
         for i in brain.s.objects.indices { brain.s.objects[i].x = min(max(brain.s.objects[i].x, 40), Double(f.width) - 40) }
 
@@ -86,7 +97,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .play, "ball"), (15, .play, "plush"), (40, .sit, nil), (48, .kennel, "kennel"), (63, .zoomies, nil)]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .kennel, "kennel"), (36, .sleep, "bed"), (52, .sleep, "bed"), (68, .sleep, "bed")]
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -142,6 +153,7 @@ import QuartzCore
         }
         if brain.pose.jump != nil { interval = 1.0 / 30 }   // smooth arc
         if brain.pose.hidden { interval = 1.0 }             // inside the kennel: nothing to draw
+        if brain.pose.twitch { interval = 1.0 / 8 }         // dreaming: paddling paws
         let t = Timer(timeInterval: interval, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         t.tolerance = interval * 0.2
         RunLoop.main.add(t, forMode: .common)
@@ -154,7 +166,8 @@ import QuartzCore
         let t = CACurrentMediaTime()
         var lift: CGFloat = 0
         if p.anim == .hop { lift = abs(sin(t * 7)) * 18 }
-        if p.twitch { lift = 2 }
+        if p.twitch && p.anim != .sleep { lift = 2 }
+        if p.inBed != nil { lift += 9 }   // lying on the cushion, not the floor
         if let j = p.jump { lift += sin(j * .pi) * p.jumpHeight }
         if p.anim == .run || p.anim == .zoom { lift += Int(p.x / 16) % 2 == 0 ? 0 : 2 }   // gallop bounce
         let s = DogSprite.size
@@ -169,7 +182,14 @@ import QuartzCore
         case .run: return Int(p.x / 16) % 2 == 0 ? .runA : .runB
         case .zoom: return Int(p.x / 20) % 2 == 0 ? .zoomA : .zoomB
         case .sit: return p.front ? .sitFront : p.back ? .sitBack : .sit
-        case .sleep: return .sleep
+        case .sleep:
+            let dreaming = p.twitch && Int(t * 6) % 2 == 0   // each position has its own dream twitch
+            switch p.sleepPos {
+            case "curl": return dreaming ? .sleepCurlTwitch : .sleepCurl      // ear flicks
+            case "side": return dreaming ? .sleepSideTwitch : .sleepSide      // legs paddle
+            case "belly": return dreaming ? .sleepBellyTwitch : .sleepBelly   // paws kick the air
+            default: return dreaming ? .sleepTwitch : .sleep                   // front paw kicks
+            }
         case .play:
             if p.play == "shake" { return Int(t * 6) % 2 == 0 ? .shakeA : .shakeB }   // shaking the toy in its mouth
             return Int(t * 3) % 2 == 0 ? .pawUp : .stand                               // batting at the ball
@@ -187,14 +207,19 @@ import QuartzCore
         let t = CACurrentMediaTime()
         let frame = spriteFrame(p, time: t)
         let origin = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
-        let key = "\(frame.rawValue)\(p.facing)"
         let emote = p.emote ?? ""
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if dogLayer.isHidden != p.hidden { dogLayer.isHidden = p.hidden; emoteLayer.isHidden = p.hidden }
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
-        if key != spriteKey { spriteKey = key; dogLayer.contents = DogSprite.image(frame, facing: CGFloat(p.facing)) }
+        let kennelX = brain.s.objects.first { $0.kind == .kennel }.map { CGFloat($0.x) }
+        let shadow = p.inKennel && kennelX.map { CGFloat(p.x) < $0 + 13 } == true   // fully past the open end: only its shadow shows
+        let key = "\(frame.rawValue)\(p.facing)" + (shadow ? "s" : "")
+        if key != spriteKey {
+            spriteKey = key
+            dogLayer.contents = shadow ? DogSprite.silhouette(frame, facing: CGFloat(p.facing)) : DogSprite.image(frame, facing: CGFloat(p.facing))
+        }
         if emote != emoteText { emoteText = emote; emoteLayer.string = emote }
         if !emote.isEmpty {   // above the head, which sits toward the facing side
             let headTop: CGFloat = p.anim == .sleep ? 21 : 5   // art rows
@@ -224,17 +249,53 @@ import QuartzCore
             let held = o.id == carrying
             let mouthRow: CGFloat = spriteKey.hasPrefix("\(DogSprite.Frame.shakeA.rawValue)") ? 13 : spriteKey.hasPrefix("\(DogSprite.Frame.shakeB.rawValue)") ? 21 : 17
             let bottom = held ? dog.minY + mouthRow * DogSprite.pointsPerPixel : floorY // carried toys ride in its mouth
-            let pos = CGPoint(x: (CGFloat(o.x) - size.width / 2).rounded(), y: (screenH - bottom).rounded())
+            let sink: CGFloat = o.kind == .kennel ? DogSprite.footRows * DogSprite.pointsPerPixel : 0   // kennel walls reach the dog's lowest outline row
+            let pos = CGPoint(x: (CGFloat(o.x) - size.width / 2).rounded(), y: (screenH - bottom - sink).rounded())
             if l.position != pos { l.position = pos }
             let z: CGFloat = held ? 2 : (o.kind == .rug || o.kind == .bed || o.kind == .kennel ? -1 : 0)
             if l.zPosition != z { l.zPosition = z }
+            if o.kind == .kennel { renderKennelFront(over: l, inKennel: brain.pose.inKennel) }
+            if o.kind == .bed { renderBedRim(o, over: l, size: size, img: img) }
         }
+    }
+
+    /// The kennel is two pictures: the lit interior (behind the dog) and the walls and roof with the doorway and
+    /// window cut out — in front of the dog while it goes in, potters about inside and comes back out.
+    func renderKennelFront(over back: CALayer, inKennel: Bool) {
+        let front = kennelFront ?? {
+            let (img, size) = ObjectSprite.image(id: "kennelFront", kind: "kennelFront")
+            let l = CALayer()
+            l.contents = img; l.anchorPoint = .zero; l.bounds = CGRect(origin: .zero, size: size); l.magnificationFilter = .nearest
+            panel.contentView!.layer!.addSublayer(l)
+            kennelFront = l
+            return l
+        }()
+        if front.position != back.position { front.position = back.position }
+        let z: CGFloat = inKennel ? 1.5 : -0.5
+        if front.zPosition != z { front.zPosition = z }
+    }
+
+    /// The bed's front rim, drawn over the dog while it lies in that bed so it sits *in* the bed.
+    func renderBedRim(_ bed: PetObject, over back: CALayer, size: CGSize, img: CGImage) {
+        let rows = 5   // bottom rows of the bed art: the front lip
+        let rim = bedRims[bed.id] ?? {
+            let l = CALayer()
+            l.contents = img.cropping(to: CGRect(x: 0, y: img.height - rows, width: img.width, height: rows))
+            l.anchorPoint = .zero; l.magnificationFilter = .nearest
+            l.bounds = CGRect(x: 0, y: 0, width: size.width, height: CGFloat(rows) * DogSprite.pointsPerPixel)
+            panel.contentView!.layer!.addSublayer(l)
+            bedRims[bed.id] = l
+            return l
+        }()
+        if rim.position != back.position { rim.position = back.position }
+        let z: CGFloat = brain.pose.inBed == bed.id ? 1.5 : -0.9
+        if rim.zPosition != z { rim.zPosition = z }
     }
 
     func updateHitTest() {
         let m = NSEvent.mouseLocation
         let cursor = CGPoint(x: m.x, y: screenH - m.y)
-        let hit = !brain.pose.hidden && dogRect.insetBy(dx: -4, dy: -12).contains(cursor)
+        let hit = !brain.pose.hidden && !brain.pose.inKennel && dogRect.insetBy(dx: -4, dy: -12).contains(cursor)
         if panel.ignoresMouseEvents == hit { panel.ignoresMouseEvents = !hit }
     }
 

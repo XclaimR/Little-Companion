@@ -4,7 +4,7 @@ import ImageIO
 
 /// Ollie's pixel-art frames, from Resources/ollie.png (six 48×36 frames, drawn in Pixelwright, facing right).
 enum DogSprite {
-    enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack }
+    enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch }
     static let pixels = CGSize(width: 48, height: 36)
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }
@@ -32,6 +32,23 @@ enum DogSprite {
             c.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
             img = c.makeImage()!
         }
+        cache[key] = img
+        return img
+    }
+
+    /// The same frame as a soft dark shadow: how it looks through the kennel window.
+    static func silhouette(_ frame: Frame, facing dir: CGFloat) -> CGImage {
+        let key = "s\(frame.rawValue)\(dir)"
+        if let img = cache[key] { return img }
+        let src = image(frame, facing: dir)
+        let c = CGContext(data: nil, width: src.width, height: src.height, bitsPerComponent: 8, bytesPerRow: 0,
+                          space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let r = CGRect(x: 0, y: 0, width: src.width, height: src.height)
+        c.draw(src, in: r)
+        c.setBlendMode(.sourceIn)
+        c.setFillColor(CGColor(srgbRed: 0.48, green: 0.34, blue: 0.24, alpha: 1))   // soft shadow against the lamp-lit interior
+        c.fill(r)
+        let img = c.makeImage()!
         cache[key] = img
         return img
     }
@@ -74,7 +91,7 @@ enum ObjectSprite {
 
     /// The picture and its size in points (art pixels × DogSprite.pointsPerPixel).
     static func image(id: String, kind: String) -> (CGImage, CGSize) {
-        let key = id == "tennis" ? "tennis" : kind
+        let key = id == "tennis" ? "tennis" : kind == "kennel" ? "kennelBack" : kind
         if let hit = cache[key] { return hit }
         let r = rects[key] ?? rects["ball"]!
         let img = atlas.cropping(to: CGRect(x: r[0], y: r[1], width: r[2], height: r[3]))!

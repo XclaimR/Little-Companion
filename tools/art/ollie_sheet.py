@@ -2,8 +2,9 @@
 import sys, json, struct, zlib, base64
 o = sys.argv[1]; sys.path.insert(0, o); import compose as hd2
 hd2.HEX.update(json.load(open(o + '/palette.json')))
-import front
+import front, sleepers
 def frame(p):
+    if p in sleepers.POSITIONS: return sleepers.POSITIONS[p]()
     if p == 'front': return front.front_sit()
     if p == 'back': return front.back_sit()
     if p == 'look':
@@ -21,7 +22,7 @@ def frame(p):
         for y in range(13, 20):
             for x in (20, 21): g[y][x] = 'l' if (x == 20 and y < 15) else 'b'
     return g
-poses = hd2.POSES + ['look', 'front', 'pawUp', 'shakeA', 'shakeB', 'back']
+poses = hd2.POSES + ['look', 'front', 'pawUp', 'shakeA', 'shakeB', 'back', 'sleepT', 'curl', 'side', 'belly', 'curlT', 'sideT', 'bellyT']
 frames = [frame(p) for p in poses]
 W, H = hd2.W, hd2.H
 rows = []
@@ -36,5 +37,5 @@ for y in range(H):
 def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
 data = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', W * len(frames), H, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + chunk(b'IEND', b'')
 open(o + '/ollie11.png', 'wb').write(data); open(o + '/ollie11.b64', 'w').write(base64.b64encode(data).decode())
-hd2.png(o + '/ollie11_preview.png', [[('pudding', f) for f in frames[:8]], [('pudding', f) for f in frames[8:]]], scale=4)
+hd2.png(o + '/ollie11_preview.png', [[('pudding', f) for f in frames[:12]], [('pudding', f) for f in frames[12:]]], scale=4)
 print(poses, len(data), 'bytes')

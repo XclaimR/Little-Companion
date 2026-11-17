@@ -96,7 +96,7 @@ public func simulate(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> SimR
 
         if (s.busyRetreat == true) && !wasBusyRetreat { r.busyRetreats += 1 }
         wasBusyRetreat = s.busyRetreat == true
-        let outOfTheWay = s.activity.act == .kennel && s.activity.destX == nil || s.activity.act == .sleep && s.activity.destX == nil
+        let outOfTheWay = s.activity.act == .kennel && s.activity.phase == "inside" || s.activity.act == .sleep && s.activity.destX == nil
         busySince = busy && !outOfTheWay ? (busySince ?? t) : nil   // time out and about during a busy spell
         if let since = busySince, t - since > 120, s.activity.act != .eat, s.activity.act != .drink {
             r.failures.append("still out and about 2 min into a busy spell at t=\(Int(t))s (\(s.activity.act))"); busySince = t

@@ -122,16 +122,19 @@ def compose(breed, pose):
             for x in range(int(cx - 5), int(cx + 3)): put(x, y, 'pawB')
         zones['pawB'] = ('leg', cx - 5, 8, False)
         A.update(cx=cx + 4, cy=21, L=5.5, ry=8.5, chx=chx, belly=None)
-    elif pose == 'sleep':
+    elif pose in ('sleep', 'sleepT'):
         cx = 20 - (L - 13) * 0.6
         bry = max(ry - .5, 4.5)
         cy = FLOOR + 1 - bry
-        A['tail'] = (cx - L + 3, cy - bry + 1)
+        A['tail'] = (cx - L + 3, cy - bry + 1 - (1.5 if pose == 'sleepT' else 0))   # tail tip flicks up
         ell('body', cx, cy, L + 1, bry)
         draw_tail(P, A['tail'], ell, poly, 'sleep')
         hx, hy = cx + L + .5, FLOOR + 1.5 - hry
+        twitch = pose == 'sleepT'   # dreaming: front paws paddle forward
         for y in (32, 33):
-            for x in range(int(hx - 3), int(hx + 6)): put(x, y, 'pawF')
+            for x in range(int(hx - 3), int(hx + (11 if twitch else 6))): put(x, y, 'pawF')
+        if twitch:
+            for x in range(int(hx + 8), int(hx + 12)): put(x, 31, 'pawF')   # one paw kicking up
         zones['pawF'] = ('leg', hx - 3, 9, False)
         A.update(cx=cx, cy=cy, L=L + 1, ry=bry, chx=cx + L - 1, belly=None)
     else:  # bow: rear up, chest down, front legs flat forward, tail high
@@ -154,14 +157,14 @@ def compose(breed, pose):
 
     # head, muzzle, ears
     A.update(hx=hx, hy=hy)
-    sleeping = pose == 'sleep'
+    sleeping = pose in ('sleep', 'sleepT')
     ell('head', hx, hy, hrx, hry * (.92 if sleeping else 1))
     mx, my = (hx + hrx - .5, FLOOR - .6) if sleeping else (hx + hrx, hy + 2.7)
     if pose == 'shakeA': mx, my = hx + hrx - .3, hy + 1.2   # muzzle tipped up
     if pose == 'shakeB': mx, my = hx + hrx - .2, hy + 3.4   # muzzle tipped down
     ell('muzzle', mx, my, mrx, mry * (.85 if sleeping else 1))
     A.update(mx=mx, my=my)
-    P = dict(P, _gait=('zoom' if pose.startswith('zoom') else 'run' if pose.startswith('run') or pose == 'shakeA' else None))
+    P = dict(P, _gait=('zoom' if pose.startswith('zoom') else 'run' if pose.startswith('run') or pose in ('shakeA', 'sleepT') else None))
     draw_ears(P, hx, hy, hrx, hry, ell, poly, sleeping)
 
     # tones from zones (light from the top-left)
@@ -184,7 +187,7 @@ def compose(breed, pose):
         for x in range(W):
             if sh[y][x] in ('earF', 'tailF') and g[y][x] in 'bl': g[y][x] = 's'
 
-    if P['tail'] == 'curl' and pose != 'sleep':
+    if P['tail'] == 'curl' and pose not in ('sleep', 'sleepT'):
         tx, ty = A['tail']
         for y in range(H):
             for x in range(W):
@@ -192,7 +195,7 @@ def compose(breed, pose):
     for y in range(H):
         for x in range(W):
             if g[y][x] == 'a' and (y + 1 >= H or g[y + 1][x] != 'a' or x + 1 >= W or g[y][x + 1] != 'a'): g[y][x] = 'e' if P['marks'] == 'beagle' else 'd'
-    if P['ear'] in ('pointy', 'folded', 'small') and pose != 'sleep':   # inner ear: pixels fully inside the near ear
+    if P['ear'] in ('pointy', 'folded', 'small') and pose not in ('sleep', 'sleepT'):   # inner ear: pixels fully inside the near ear
         inner = [(x, y) for y in range(1, H - 1) for x in range(1, W - 1) if sh[y][x] == 'earN' and all(sh[y + dy][x + dx] == 'earN' for dx, dy in ((1, 0), (-1, 0), (0, -1)))]
         for (x, y) in inner: g[y][x] = 'i'
     apply_marks(P, pose, g, sh, A)
@@ -214,14 +217,14 @@ def compose(breed, pose):
     # remove lone outline corner nubs (outline pixel with a single outline neighbour and no fill neighbour diagonally) — keep simple: none
 
     draw_face(P, g, A, sleeping)
-    if P.get('collar') and pose not in ('sleep', 'bow'): draw_collar(g, A, pose)
+    if P.get('collar') and pose not in ('sleep', 'sleepT', 'bow'): draw_collar(g, A, pose)
     return g
 
 def draw_tail(P, at, ell, poly, pose):
     tx, ty = at
     t = P['tail']
     if t == 'curl':
-        if pose == 'sleep': ell('tail', tx, ty - 1, 4.5, 3.2)
+        if pose in ('sleep', 'sleepT'): ell('tail', tx, ty - 1, 4.5, 3.2)
         else:
             ell('tail', tx - 1, ty - 4, 5, 4.6)
             poly('tailbase', [(tx + 1, ty - 2), (tx + 5, ty - 1), (tx + 5, ty + 2), (tx + 1, ty + 1)], (tx, ty, 4, 3))
@@ -231,17 +234,17 @@ def draw_tail(P, at, ell, poly, pose):
         if pose == 'zoom': poly('tail', [(tx + 2, ty + 2), (tx - 9, ty - 1), (tx - 9.5, ty + 1), (tx + 2, ty + 4)], (tx - 3, ty + 1, 5, 2))
         else: poly('tail', [(tx + 2, ty + 2), (tx - 3, ty - 4), (tx - 6, ty - 7), (tx - 4.5, ty - 8), (tx - 1, ty - 4.5), (tx + 3.5, ty)], (tx - 2, ty - 3, 4, 4))
     elif t == 'flag':
-        if pose == 'sleep': poly('tail', [(tx, ty), (tx - 7, ty + 3), (tx - 7, ty + 5), (tx, ty + 3)], (tx - 3, ty + 2, 4, 2))
+        if pose in ('sleep', 'sleepT'): poly('tail', [(tx, ty), (tx - 7, ty + 3), (tx - 7, ty + 5), (tx, ty + 3)], (tx - 3, ty + 2, 4, 2))
         else: poly('tail', [(tx + 2, ty + 2), (tx - 1, ty - 2), (tx - 3, ty - 8), (tx - 1.5, ty - 9.5), (tx + .5, ty - 3), (tx + 3.5, ty)], (tx, ty - 4, 3, 5))
     elif t == 'plume':
-        if pose == 'sleep': ell('tail', tx, ty, 5, 3)
+        if pose in ('sleep', 'sleepT'): ell('tail', tx, ty, 5, 3)
         else: ell('tail', tx + 1, ty - 3, 5, 3.6); ell('tail', tx + 4.5, ty - 5.2, 3.6, 2.6)
     elif t == 'thin':
         if pose == 'bow': poly('tail', [(tx + 2, ty + 3), (tx - 3, ty - 4), (tx - 2, ty - 5), (tx + 3, ty + 1)], (tx, ty, 3, 4))
         else: poly('tail', [(tx + 2, ty + 1.5), (tx - 6, ty + 5), (tx - 6.5, ty + 4), (tx + 2, ty - .5)], (tx - 2, ty + 2, 5, 3))
     elif t == 'brush':
         if pose == 'bow': poly('tail', [(tx + 3, ty + 3), (tx - 1, ty - 1), (tx - 4, ty - 6), (tx - 2, ty - 7), (tx + 2, ty - 2), (tx + 5, ty + 1)], (tx, ty - 2, 4, 5))
-        elif pose == 'sleep': poly('tail', [(tx, ty), (tx - 8, ty + 3), (tx - 8, ty + 6), (tx, ty + 4)], (tx - 4, ty + 3, 5, 3))
+        elif pose in ('sleep', 'sleepT'): poly('tail', [(tx, ty), (tx - 8, ty + 3), (tx - 8, ty + 6), (tx, ty + 4)], (tx - 4, ty + 3, 5, 3))
         else: poly('tail', [(tx + 2, ty), (tx - 2, ty + 3), (tx - 4, ty + 9), (tx - 2, ty + 11), (tx, ty + 6), (tx + 3, ty + 3)], (tx, ty + 4, 3, 6))
 
 def draw_ears(P, hx, hy, hrx, hry, ell, poly, sleeping):
@@ -272,7 +275,7 @@ def apply_marks(P, pose, g, sh, A):
                 if g[y][x] and g[y][x] in 'bslde' and (only is None or sh[y][x] in only) and test(x + .5, y + .5):
                     g[y][x] = dark if g[y][x] in 'sd' else light
     legs = ('legBN', 'legFN', 'pawB', 'pawF', 'farback', 'farfront', 'farpaw')
-    sleeping = pose == 'sleep'
+    sleeping = pose in ('sleep', 'sleepT')
     muzzle_lower = lambda x, y: ((x - A['mx'] + .8) / (P['muz'][0] + 1.2)) ** 2 + ((y - A['my'] - .6) / (P['muz'][1] + .2)) ** 2 <= 1 and y > A['my'] - .6
     cheek = lambda x, y: ((x - hx - 1.5) / 3.2) ** 2 + ((y - hy - 3.2) / 2.2) ** 2 <= 1
     chest = lambda x, y: ((x - A['chx'] - 1.5) / 3.2) ** 2 + ((y - A['cy'] - .5) / (A['ry'] * .8)) ** 2 <= 1
@@ -299,8 +302,8 @@ def apply_marks(P, pose, g, sh, A):
         paint(lambda x, y: y > FLOOR - 4.5, only=legs)
         if pose.startswith('zoom'): paint(lambda x, y: x < A['tail'][0] - 7, only=('tail',))
         elif pose.startswith('run'): paint(lambda x, y: y < A['tail'][1] - 5.5, only=('tail',))
-        else: paint(tailtip('up' if pose != 'sleep' else 'x'), only=('tail',))
-        if pose == 'sleep': paint(lambda x, y: x < A['tail'][0] - 4, only=('tail',))
+        else: paint(tailtip('up' if pose not in ('sleep', 'sleepT') else 'x'), only=('tail',))
+        if pose in ('sleep', 'sleepT'): paint(lambda x, y: x < A['tail'][0] - 4, only=('tail',))
     elif m == 'collie':
         paint(muzzle_lower); paint(lambda x, y: ((x - A['mx']) / (P['muz'][0] + .5)) ** 2 + ((y - A['my']) / (P['muz'][1] + .5)) ** 2 <= 1, only=('muzzle',))
         if not sleeping:

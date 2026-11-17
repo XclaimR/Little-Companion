@@ -83,6 +83,7 @@ public struct Activity: Codable, Sendable, Equatable {
     public var running: Bool? = nil   // run instead of walk to the destination (optional: older saves load)
     public var front: Bool? = nil     // sitting facing the viewer
     public var back: Bool? = nil      // sitting with its back to the viewer
+    public var phase: String? = nil   // kennel visit: "door" → "enter" → "inside" → "exit"
 }
 
 public struct Memory: Codable, Sendable, Equatable {
@@ -124,6 +125,9 @@ public struct DogState: Codable, Sendable, Equatable {
     public var lastCursorX: Double?
     public var busyRetreat: Bool?       // went into the kennel because the Mac was busy
     public var nextRoll: Double?        // when the ball it's playing with next rolls away
+    public var nextDream: Double?       // when the next dream (twitching) starts while asleep
+    public var sleepPos: String?        // "flat", "curl", "side" or "belly"
+    public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
 }
 
 /// What the outside world tells the brain each tick.
@@ -156,4 +160,7 @@ public struct Pose: Sendable, Equatable {
     public var front: Bool = false          // sitting facing the viewer
     public var back: Bool = false           // sitting facing away
     public var play: String? = nil          // "chase" (balls) or "shake" (plush, rope) while playing
+    public var inKennel = false             // through the doorway or inside: the kennel's walls are in front of it
+    public var sleepPos: String? = nil      // sleeping position while asleep
+    public var inBed: String? = nil         // id of the bed it's lying in
 }

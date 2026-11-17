@@ -36,10 +36,10 @@ func aDayAloneHoldsInvariants(seed: UInt64) {
     b.s.activity = Activity(act: .idle, target: nil, destX: nil, remaining: 5, started: 0)
     let busy = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil, systemBusy: true)
     for _ in 0..<(5 * 60 * 5) { b.update(dt: 0.2, env: busy) }   // 5 busy minutes
-    #expect(b.s.activity.act == .kennel && b.pose.hidden)
+    #expect(b.s.activity.act == .kennel && b.s.activity.phase == "inside" && b.pose.inKennel)
     let calm = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil)
     for _ in 0..<(3 * 60 * 5) { b.update(dt: 0.2, env: calm) }    // comes out within a few minutes once it's quiet
-    #expect(!b.pose.hidden)
+    #expect(b.s.activity.act != .kennel)   // walked back out through the door
 }
 
 @Test func sameSeedSameDay() {
