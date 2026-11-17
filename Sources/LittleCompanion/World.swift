@@ -27,14 +27,8 @@ import QuartzCore
         screenW = f.width; screenH = f.height
         floorY = f.height - (screen.visibleFrame.minY - f.minY) // top of the Dock
 
-        if let saved = Store.load() {
-            brain = Brain(state: saved.state)
-            brain.resume(afterOffline: Date().timeIntervalSince(saved.savedAt))
-        } else {
-            brain = Brain(seed: UInt64.random(in: 1...UInt64.max)) // adoption: new hidden personality
-            brain.s.objects = defaultObjects(width: Double(f.width))
-            brain.s.x = 160
-        }
+        DogSprite.dog = UserDefaults.standard.string(forKey: "dog") ?? "ollie"
+        brain = Self.loadBrain(DogSprite.dog, width: Double(f.width), home: nil)
         if !brain.s.objects.contains(where: { $0.kind == .kennel }) {
             brain.s.objects.insert(PetObject(id: "kennel", kind: .kennel, x: 60), at: 0)
         }
@@ -112,7 +106,32 @@ import QuartzCore
         }
     }
 
-    func save() { Store.save(brain.s) }
+    func save() { Store.save(brain.s, dog: DogSprite.dog) }
+
+    /// A dog's saved life, or a newly adopted one (new hidden personality) living in the same home.
+    static func loadBrain(_ dog: String, width: Double, home: [PetObject]?) -> Brain {
+        if let saved = Store.load(dog) {
+            var b = Brain(state: saved.state)
+            b.resume(afterOffline: Date().timeIntervalSince(saved.savedAt))
+            return b
+        }
+        var b = Brain(seed: UInt64.random(in: 1...UInt64.max))
+        b.s.objects = home ?? defaultObjects(width: width)
+        b.s.x = 160
+        return b
+    }
+
+    /// Swap in another dog: this one's life is saved, the other picks up where it left off (or arrives new, in the same home).
+    func switchDog(to dog: String) {
+        guard dog != DogSprite.dog else { return }
+        save()
+        let home = brain.s.objects
+        DogSprite.dog = dog
+        UserDefaults.standard.set(dog, forKey: "dog")
+        brain = Self.loadBrain(dog, width: Double(screenW), home: home)
+        spriteKey = ""; dogOrigin = CGPoint(x: -1, y: -1)
+        render()
+    }
 
     func logChanges() {
         let s = brain.s, a = s.activity, p = brain.pose

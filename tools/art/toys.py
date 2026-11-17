@@ -5,6 +5,7 @@ HERE = __file__.rsplit('/', 1)[0] or '.'
 HEX = json.load(open(HERE + '/palette.json'))
 ITEMS = json.load(open(HERE + '/objects_grids.json'))['items']
 TOYS = ['ball', 'tennis', 'plush', 'rope']
+BREED = 'pudding'
 POSES = ['walkA', 'walkB', 'runA', 'runB', 'stand', 'shakeA', 'shakeB', 'toss']
 
 def toy_grid(name):
@@ -13,9 +14,9 @@ def toy_grid(name):
 
 def frame(toy, pose):
     base = 'shakeA' if pose == 'toss' else pose
-    g = hd2.compose('pudding', base)
+    g = hd2.compose(BREED, base)
     A = hd2.LAST_ANCHORS
-    out = [[HEX[hd2.PAL['pudding'][k]] if k else None for k in row] for row in g]
+    out = [[hd2.hexof(BREED, k) if k else None for k in row] for row in g]
     t = toy_grid(toy); th, tw = len(t), len(t[0])
     tip = A['mx'] + A['mrx'] - 1                     # front of the muzzle
     if pose == 'toss':                               # flung up in front of his face (the app adds a little hop)

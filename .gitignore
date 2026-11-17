@@ -2,5 +2,4 @@
 .swiftpm/
 *.app/
 .DS_Store
-tools/art/ollie11.*
-tools/art/ollie11_preview.png
+tools/art/build/

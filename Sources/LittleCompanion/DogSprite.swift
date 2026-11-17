@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-/// Ollie's pixel-art frames, from Resources/ollie.png (six 48×36 frames, drawn in Pixelwright, facing right).
+/// The current dog's pixel-art frames, from Resources/<dog>.png (48×36 frames facing right, built by tools/art/ollie_sheet.py).
 enum DogSprite {
     enum Frame: Int { case stand, walkA, walkB, sit, sleep, bow, runA, runB, zoomA, zoomB, look, sitFront, pawUp, shakeA, shakeB, sitBack, sleepTwitch, sleepCurl, sleepSide, sleepBelly, sleepCurlTwitch, sleepSideTwitch, sleepBellyTwitch
         case wagStandA = 55, wagStandB, wagSitA, wagSitB, wagFrontA, wagFrontB, wagBackA, wagBackB,   // after the 32 baked toy frames
@@ -31,13 +31,20 @@ enum DogSprite {
     static let footRows: CGFloat = 2           // empty art rows under the paws
     static let scale: CGFloat = 2              // backing scale for the CoreGraphics-drawn objects
 
-    private static let sheet: CGImage = {
-        guard let url = Bundle.module.url(forResource: "ollie", withExtension: "png"),
+    /// The dogs you can have: sheet name, name, and what they are. Every sheet has the same frame layout.
+    static let dogs = [("ollie", "Ollie", "beagle"), ("biscuit", "Biscuit", "shiba"), ("mochi", "Mochi", "fluffy white pup"),
+                       ("bean", "Bean", "dachshund"), ("pepper", "Pepper", "border collie")]
+    nonisolated(unsafe) static var dog = "ollie" { didSet { if dog != oldValue { cache = [:]; loaded = nil } } }
+    nonisolated(unsafe) private static var loaded: CGImage?
+    private static var sheet: CGImage {
+        if let loaded { return loaded }
+        guard let url = Bundle.module.url(forResource: dog, withExtension: "png"),
               let src = CGImageSourceCreateWithURL(url as CFURL, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
-        else { fatalError("ollie.png missing from the app bundle") }
+        else { fatalError("\(dog).png missing from the app bundle") }
+        loaded = img
         return img
-    }()
+    }
     nonisolated(unsafe) private static var cache: [String: CGImage] = [:]
 
     static func image(_ frame: Frame, facing dir: CGFloat) -> CGImage { image(frame.rawValue, facing: dir) }

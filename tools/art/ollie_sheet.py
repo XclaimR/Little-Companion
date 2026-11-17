@@ -1,14 +1,19 @@
-# Ollie's full sheet: the 10 composer poses + a look-back frame, with the studio touch-ups.
+# A dog's full sheet (python3 ollie_sheet.py tools/art <breed>): composer poses, front/back sits, sleep positions,
+# toys, wags, jumps, falls and grooming. Writes tools/art/build/<name>.png.
 import sys, json, struct, zlib, base64
 o = sys.argv[1]; sys.path.insert(0, o); import compose as hd2
 hd2.HEX.update(json.load(open(o + '/palette.json')))
-import front, sleepers, toys
+import front, sleepers, toys, os
+B = sys.argv[2] if len(sys.argv) > 2 else 'pudding'
+NAME = {'pudding': 'ollie'}.get(B, B)
+front.EARS = 'floppy' if hd2.BREEDS[B]['ear'] in ('floppy', 'long') else hd2.BREEDS[B]['ear']
+toys.BREED = B
 def frame(p):
     if p in sleepers.POSITIONS: return sleepers.POSITIONS[p]()
     if p == 'front': return front.front_sit()
     if p == 'back': return front.back_sit()
     if p == 'look':
-        g = hd2.compose('pudding', 'stand')
+        g = hd2.compose(B, 'stand')
         region = [row[30:48] for row in g[:18]]
         for y in range(18):
             for i, k in enumerate(region[y][::-1]):
@@ -17,8 +22,8 @@ def frame(p):
             for x in range(40, 48):
                 if g[y][x] in ('r', 'q'): g[y][x] = 'a'
         return g
-    g = hd2.compose('pudding', p)
-    if p == 'sit':
+    g = hd2.compose(B, p)
+    if p == 'sit' and B == 'pudding':   # studio touch-up on Ollie's sit
         for y in range(13, 20):
             for x in (20, 21): g[y][x] = 'l' if (x == 20 and y < 15) else 'b'
     return g
@@ -32,7 +37,7 @@ frames += [wag(p, w) for p in ('stand', 'sit', 'front', 'back', 'walkA', 'walkB'
 frames += [frame(p) for p in ('crouch', 'runJU', 'runJD')]   # 71-73: jump crouch, take-off, coming down
 frames += [frame('trip'), sleepers.belly(awake=True), sleepers.side(awake=True)]   # 74-76: trip, tumble roll, sprawled after a tumble
 def lick(p):
-    g = hd2.compose('pudding', p)
+    g = hd2.compose(B, p)
     a = hd2.LAST_ANCHORS
     x, y = int(a['mx'] + a['mrx'] - 2), int(a['my'] + 2)    # tongue out at the front of the mouth, onto the paw
     for (dx, dy) in ((0, 0), (1, 0), (0, 1)) if p == 'lickA' else ((0, 0), (1, 0), (1, 1), (0, 1)):
@@ -46,12 +51,12 @@ for y in range(H):
     for f in frames:
         for x in range(W):
             k = f[y][x]
-            if k: hx = k if k.startswith('#') else hd2.HEX[hd2.PAL['pudding'][k]]; r += bytes(int(hx[i:i+2], 16) for i in (1, 3, 5)) + b'\xff'
+            if k: hx = k if k.startswith('#') else hd2.hexof(B, k); r += bytes(int(hx[i:i+2], 16) for i in (1, 3, 5)) + b'\xff'
             else: r += b'\x00\x00\x00\x00'
     rows.append(bytes(r))
 def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
 data = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', W * len(frames), H, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + chunk(b'IEND', b'')
-open(o + '/ollie11.png', 'wb').write(data); open(o + '/ollie11.b64', 'w').write(base64.b64encode(data).decode())
+os.makedirs(o + '/build', exist_ok=True); open(o + f'/build/{NAME}.png', 'wb').write(data)
 cols = 11   # preview: equal rows (the png helper sizes the sheet from the first row)
-hd2.png(o + '/ollie11_preview.png', [[('pudding', f) for f in frames[r:r + cols]] for r in range(0, len(frames), cols)], scale=3)
+hd2.png(o + f'/build/{NAME}_preview.png', [[(B, f) for f in frames[r:r + cols]] for r in range(0, len(frames), cols)], scale=3)
 print(poses, len(data), 'bytes')

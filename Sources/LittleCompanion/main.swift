@@ -9,12 +9,21 @@ app.run()
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var world: World?
     var statusItem: NSStatusItem?
+    let header = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let dogMenu = NSMenu()
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.title = "🐾"
         let menu = NSMenu()
-        menu.addItem(withTitle: "Ollie", action: nil, keyEquivalent: "").isEnabled = false
+        header.isEnabled = false
+        menu.addItem(header)
+        let dogs = menu.addItem(withTitle: "Change dog", action: nil, keyEquivalent: "")
+        for (id, name, kind) in DogSprite.dogs {
+            let item = dogMenu.addItem(withTitle: "\(name) — \(kind)", action: #selector(pickDog(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = id
+        }
+        menu.setSubmenu(dogMenu, for: dogs)
         menu.addItem(.separator())
         if ProcessInfo.processInfo.environment["LC_DEBUG"] != nil {
             for (title, sel) in [("Test: play with the ball", #selector(testBall)), ("Test: shake the plush", #selector(testPlush)),
@@ -31,6 +40,18 @@ app.run()
         statusItem = item
 
         world = World(screen: NSScreen.main!)
+        refreshDogMenu()
+    }
+
+    @objc func pickDog(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        world?.switchDog(to: id)
+        refreshDogMenu()
+    }
+
+    func refreshDogMenu() {
+        header.title = DogSprite.dogs.first { $0.0 == DogSprite.dog }?.1 ?? "Little Companion"
+        for item in dogMenu.items { item.state = item.representedObject as? String == DogSprite.dog ? .on : .off }
     }
 
     func applicationWillTerminate(_ note: Notification) { world?.save() }

@@ -79,7 +79,7 @@ def compose(breed, pose):
         if pose == 'pawUp':   # near front paw raised, reaching forward to bat at the ball
             zones['legFN'] = ('leg', fx, 4, False)
             for y in range(int(top - .5), FLOOR - 4):
-                t = (y - top) / (FLOOR - 4 - top)
+                t = (y - top) / max(1, FLOOR - 4 - top)
                 for x in range(int(fx + 4 * t), int(fx + 4 * t) + 4): put(x, y, 'legFN')
             for x in range(int(fx + 4), int(fx + 9)): put(x, FLOOR - 4, 'legFN'); put(x, FLOOR - 5, 'legFN')
         else:
@@ -131,7 +131,7 @@ def compose(breed, pose):
         cx = 19
         hx, hy = cx + 10, 10.5
         if lick: hx, hy = cx + 12.5, 16 + (1 if pose == 'lickB' else 0)       # head bowed to the raised paw, bobbing as it licks
-        if scratch: hx, hy = cx + 9.5, 12.5                                 # head tipped toward the scratching foot
+        if scratch: hx, hy = cx + 9, 13                                     # head tipped down toward the scratching foot
         A['tail'] = (cx - 6.5, 25)
         leg('farfront', cx + 10.5, 21, FLOOR - 2, w=3, far=True)
         ell('haunch', cx - 1.5, 27.5, 7.5, 6)
@@ -148,18 +148,23 @@ def compose(breed, pose):
                 for x in range(int(cx + 11), int(cx + 17)): put(x, y, 'legFN', 'c')   # white paw up at the mouth
         else:
             leg('legFN', cx + 6.5, 22, FLOOR - 2, paw=1)
-        if scratch:   # near hind leg swung up to the ear, foot kicking (A/B: two kick positions)
+        if scratch:   # near hind leg brought forward under the belly and up, foot raking behind the ear (A/B: two kick positions)
             k = 0 if pose == 'scratchA' else 2
-            zones['legBN'] = ('leg', cx - 1, 4, False)
-            y0 = int(hy + 4 + k)
-            for y in range(y0, 30):   # dark against the body so the raised leg reads, outlined on its front edge
-                t = (y - y0) / (30 - y0)
-                xs = int((hx - 10) + (cx - 4 - (hx - 10)) * t)
-                put(xs - 1, y, 'legBN', 'o')
-                for x in range(xs, xs + 3): put(x, y, 'legBN', 'd')
-                put(xs + 3, y, 'legBN', 'o')
-            for y in range(int(hy + 1 + k), int(hy + 4 + k)):
-                for x in range(int(hx - 12), int(hx - 7)): put(x, y, 'legBN', 'c')   # white foot behind the ear
+            zones['legBN'] = ('leg', cx, 4, False)
+            kx, ky = cx + 5, 27                               # knee raised forward, at the front of the haunch
+            fx, fy = hx - 11 + k / 2, hy + k                  # foot up behind the back of the head
+            for y in range(int(fy + 2), ky + 1):              # lower leg: a shaded bar with its own outline, so it reads over the body
+                t = (y - (fy + 2)) / max(1, ky - (fy + 2))
+                xs = int(round(fx + (kx - fx) * t))
+                put(xs - 1, y, 'legBN', 'o'); put(xs + 3, y, 'legBN', 'o')
+                for x in range(xs, xs + 3): put(x, y, 'legBN', 's' if x == xs + 2 else 'b')
+            for y in range(ky - 2, ky + 4):                   # the knee: a rounded joint where the thigh folds
+                for x in range(int(kx) - 3, int(kx) + 3):
+                    if (x - kx + .5) ** 2 / 9 + (y - ky - .5) ** 2 / 9 <= 1: put(x, y, 'legBN', 's')
+            for y in range(int(fy - 1), int(fy + 3)):         # white foot, outlined
+                for x in range(int(fx - 2), int(fx + 4)):
+                    edge = y in (int(fy - 1), int(fy + 2)) or x in (int(fx - 2), int(fx + 3))
+                    put(x, y, 'legBN', 'o' if edge else 'c')
         else:
             for y in (32, 33):
                 for x in range(int(cx - 5), int(cx + 3)): put(x, y, 'pawB')
@@ -270,6 +275,7 @@ def compose(breed, pose):
 WAG = 0   # tail wag: -1 tip back/down, +1 tip forward/up (set by the sheet builder)
 def draw_tail(P, at, ell, poly, pose):
     tx, ty = at; w = WAG
+    if w and not (P['tail'] == 'flag' or (P['tail'] in ('thin', 'brush') and pose == 'sit')): tx += 1.5 * w; ty -= .5 * abs(w)   # other tails: the whole tail swings
     t = P['tail']
     if t == 'curl':
         if pose in ('sleep', 'sleepT'): ell('tail', tx, ty - 1, 4.5, 3.2)
@@ -403,13 +409,18 @@ def draw_collar(g, A, pose):
     for y in (ty, ty + 1): set_if(g, tx, y, 't')
 
 PAL = {   # key -> token per dog
-  'biscuit': dict(o='biscuit-outline', d='biscuit-deep', s='biscuit-shade', b='biscuit-base', l='biscuit-light', c='biscuit-mark', k='biscuit-creamshade', i='biscuit-inner', y='biscuit-eye', w='mochi-light', n='biscuit-eye', m='biscuit-mouth', r='biscuit-collar', q='biscuit-collardark', t='biscuit-tag'),
+  'biscuit': dict(a='biscuit-ear', o='biscuit-outline', d='biscuit-deep', s='biscuit-shade', b='biscuit-base', l='biscuit-light', c='biscuit-mark', k='biscuit-creamshade', i='biscuit-inner', y='biscuit-eye', w='mochi-light', n='biscuit-eye', m='biscuit-mouth', r='biscuit-collar', q='biscuit-collardark', t='biscuit-tag'),
   'pudding': dict(o='pudding-outline', d='pudding-deep', s='pudding-shade', b='pudding-base', l='pudding-light', c='pudding-mark', k='pudding-creamshade', e='pudding-saddle', f='pudding-saddlelight', a='pudding-ear', y='pudding-eye', w='mochi-light', n='pudding-eye', m='pudding-mouth', r='pudding-collar', q='pudding-collardark', t='biscuit-tag'),
-  'mochi': dict(o='mochi-outline', d='mochi-deep', s='mochi-shade', b='mochi-base', l='mochi-light', i='plush-e', p='mochi-blush', y='mochi-eye', w='mochi-light', n='mochi-nose', m='mochi-mouth', r='mochi-collar', q='mochi-collardark', t='biscuit-tag'),
+  'mochi': dict(a='mochi-ear', c='mochi-mark', k='mochi-shade', o='mochi-outline', d='mochi-deep', s='mochi-shade', b='mochi-base', l='mochi-light', i='plush-e', p='mochi-blush', y='mochi-eye', w='mochi-light', n='mochi-nose', m='mochi-mouth', r='mochi-collar', q='mochi-collardark', t='biscuit-tag'),
   'bean': dict(o='bean-outline', d='bean-deep', s='bean-shade', b='bean-base', l='bean-light', c='bean-mark', a='bean-ear', y='bean-eye', w='mochi-light', n='bean-eye', m='bean-mouth', r='bean-collar', q='bean-collardark', t='biscuit-tag'),
-  'pepper': dict(o='pepper-outline', d='pepper-shade', s='pepper-shade', b='pepper-base', l='pepper-light', c='pepper-mark', k='pepper-markshade', i='pepper-inner', y='pepper-eye', w='mochi-light', n='pepper-nose', m='pepper-markshade', r='biscuit-tag', q='pepper-collardark', t='biscuit-collar'),
+  'pepper': dict(a='pepper-ear', o='pepper-outline', d='pepper-shade', s='pepper-shade', b='pepper-base', l='pepper-light', c='pepper-mark', k='pepper-markshade', i='pepper-inner', y='pepper-eye', w='mochi-light', n='pepper-nose', m='pepper-markshade', r='biscuit-tag', q='pepper-collardark', t='biscuit-collar'),
 }
 HEX = {}   # token -> hex, filled from palette.json
+FALLBACK = {'e': 's', 'f': 'b', 'a': 's', 'c': 'l', 'k': 's', 'i': 'l', 'p': 'l', 'w': 'l'}   # beagle-only keys (saddle etc.) on other breeds
+def hexof(breed, k):
+    if k.startswith('#'): return k
+    pal = PAL[breed]
+    return HEX[pal[k] if k in pal else pal[FALLBACK.get(k, 'b')] if FALLBACK.get(k, 'b') in pal else pal['b']]
 
 def finalize(breed, g):
     """Merge keys that share a palette slot (the studio rejects two keys for one colour)."""
@@ -436,7 +447,7 @@ def png(path, frames, scale=6):
                 for x in range(W):
                     k = g[y][x]
                     if not k: continue
-                    hx = k if k.startswith('#') else HEX[PAL[breed].get(k, PAL[breed]['b'])]
+                    hx = hexof(breed, k)
                     c = tuple(int(hx[i:i + 2], 16) for i in (1, 3, 5))
                     for sy in range(scale):
                         for sx in range(scale):

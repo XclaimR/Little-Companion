@@ -1,6 +1,17 @@
 # Ollie sitting, facing the viewer (48x36). Shapes + zone shading lit from the top-left + outline.
 import json, sys
 W, H, FLOOR = 48, 36, 33
+EARS = 'floppy'   # or 'pointy', 'folded', 'small': upright ears for breeds that have them
+def upright_ears(put, cy):
+    h = {'pointy': 7, 'folded': 5, 'small': 4}[EARS]
+    for side in (-1, 1):
+        bx0, bx1 = (16, 22) if side < 0 else (26, 32)
+        tipx = (bx0 + 1) if side < 0 else (bx1 - 1)
+        for y in range(cy - h, cy + 1):
+            t = (y - (cy - h)) / h
+            for x in range(bx0, bx1 + 1):
+                if abs(x - (tipx + ((bx0 + bx1) / 2 - tipx) * t)) <= (bx1 - bx0) / 2 * t + .5:
+                    put(x, y, 'ear' + ('L' if side < 0 else 'R'), 'a' if EARS == 'folded' and y < cy - h + 2 else 'b')
 def front_sit(wag=0):
     g = [[None]*W for _ in range(H)]; sh = [[None]*W for _ in range(H)]; zones = {}
     def ell(sid, cx, cy, rx, ry, k='b'):
@@ -19,7 +30,8 @@ def front_sit(wag=0):
     rect('legL', 19, 25, 22, 31); rect('legR', 25, 25, 28, 31)
     rect('pawL', 18, 32, 22, 33); rect('pawR', 25, 32, 29, 33)
     ell('head', 24, 11, 8.2, 7)
-    ell('earL', 15, 13.5, 3.1, 6.6, 'a'); ell('earR', 33, 13.5, 3.1, 6.6, 'a')
+    if EARS == 'floppy': ell('earL', 15, 13.5, 3.1, 6.6, 'a'); ell('earR', 33, 13.5, 3.1, 6.6, 'a')
+    else: upright_ears(lambda x, y, sid, k: (g[y].__setitem__(x, k), sh[y].__setitem__(x, sid), zones.setdefault(sid, (24, 4, 8, 4))), 6)
     # tones
     for y in range(H):
         for x in range(W):
@@ -81,7 +93,8 @@ def back_sit(wag=0):
     ell('hipL', 17.5, 29, 6.2, 4.8); ell('hipR', 30.5, 29, 6.2, 4.8)
     ell('body', 24, 23.5, 8, 9)
     ell('head', 24, 10.5, 7.6, 6.4)
-    ell('earL', 16, 13, 3, 6.2, 'a'); ell('earR', 32, 13, 3, 6.2, 'a')
+    if EARS == 'floppy': ell('earL', 16, 13, 3, 6.2, 'a'); ell('earR', 32, 13, 3, 6.2, 'a')
+    else: upright_ears(lambda x, y, sid, k: (g[y].__setitem__(x, k), sh[y].__setitem__(x, sid), zones.setdefault(sid, (24, 4, 8, 4))), 6)
     # tail: up from the base, curling to the right, white tip
     for (x, y) in [(31,30),(32,30),(32,29),(33,29),(33,28),(34,28),(34,27),(35,27),(35,26),(36,26),(35,25),(36,25),(36,24),(37,24),(36,23),(37,23),(37,22),(38,22),(37,21),(38,21),(37,20),(38,20)]:
         x += round(wag * max(0, 27 - y) / 7 * 2.5)   # wag: the upper tail swings side to side
