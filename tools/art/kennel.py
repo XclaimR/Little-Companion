@@ -80,7 +80,7 @@ if __name__ == '__main__':
     hexes = json.load(open(here + '/palette.json'))
     items = json.load(open(here + '/objects_grids.json'))['items']
     grids = {'kennelBack': kennel_back(), 'kennelFront': kennel_front(), 'bed': bed()}
-    for k in ('rug', 'window', 'plant', 'foodBowl', 'waterBowl', 'bone', 'ball', 'tennis', 'plush', 'rope'):
+    for k in ('rug', 'window', 'plant', 'foodBowl', 'waterBowl', 'bone', 'ball', 'tennis', 'plush', 'rope', 'foodBowlHalf', 'foodBowlEmpty', 'waterBowlRipple'):
         it = items[k]
         grids[k] = [[None if ch == '.' else ch for ch in row.replace('|', '')] for row in it['rows']]
         KEYS[k] = {ch: tok for ch, tok in it['keys'].items() if ch != '.'}

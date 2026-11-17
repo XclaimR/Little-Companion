@@ -119,3 +119,23 @@ import Testing
     }
     #expect(seen == ["lick", "scratch"])
 }
+
+/// Gulpers finish their meal quickly, dawdlers take their time; the bowl empties as it eats and is refilled later.
+@Test func eatingPaceFollowsPersonality() {
+    func meal(energy: Double, laziness: Double) -> (secs: Double, sawHalf: Bool, emptyAfter: Bool, fullLater: Bool) {
+        var b = Brain(seed: 2)
+        b.s.objects = defaultObjects(width: 1400); b.s.x = (b.s.objects.first { $0.id == "food" }!.x) - 24
+        b.s.personality.energy = energy; b.s.personality.laziness = laziness
+        b.s.needs.hunger = 0.9
+        let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil)
+        b.debugStart(.eat, target: "food", env: env)
+        var t = 0.0, half = false
+        while b.s.activity.act == .eat && t < 120 { b.update(dt: 0.1, env: env); t += 0.1; if b.foodLeft > 0.2 && b.foodLeft < 0.66 { half = true } }
+        let empty = b.foodLeft == 0
+        for _ in 0..<400 { b.update(dt: 1, env: env) }
+        return (t, half, empty, b.foodLeft == 1 || b.s.activity.act == .eat)
+    }
+    let gulper = meal(energy: 0.95, laziness: 0.05), dawdler = meal(energy: 0.1, laziness: 0.95)
+    #expect(gulper.secs < dawdler.secs * 0.6)
+    #expect(gulper.sawHalf && dawdler.sawHalf && gulper.emptyAfter && gulper.fullLater)
+}

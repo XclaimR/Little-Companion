@@ -102,6 +102,7 @@ public struct Activity: Codable, Sendable, Equatable {
     public var front: Bool? = nil     // sitting facing the viewer
     public var back: Bool? = nil      // sitting with its back to the viewer
     public var phase: String? = nil   // stored as text (older saves): the kennel phase, or the grooming style
+    public var total: Double? = nil   // how long it was going to take once there (for progress: the food left in the bowl)
     /// The kennel visit's phase (door → enter → inside → exit).
     public var kennel: KennelPhase? { get { phase.flatMap(KennelPhase.init) } set { phase = newValue?.rawValue } }
     /// What it's grooming.
@@ -178,7 +179,7 @@ public struct Environment: Sendable {
     }
 }
 
-public enum Anim: String, Sendable { case stand, walk, run, zoom, sit, sleep, headDown, play, stretch, hop }
+public enum Anim: String, Sendable { case stand, walk, run, zoom, sit, sleep, eat, drink, sniff, play, stretch, hop }
 
 /// What the renderer draws.
 public struct Pose: Sendable, Equatable {
@@ -205,6 +206,8 @@ public struct Pose: Sendable, Equatable {
     public var wag = false                  // tail wagging
     public var groom: Groom? = nil
     public var fall: FallStage? = nil       // where it is in a stumble
+    public var pace = 1.0                   // eating/drinking speed: gulpers chew and lap faster
+    public var stretchBack = false          // second half of a stretch: the hind legs
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.

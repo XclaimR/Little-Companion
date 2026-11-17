@@ -48,6 +48,14 @@ def blink(p):
     try: return front.front_sit() if p == 'front' else frame(p)
     finally: hd2.BLINK = front.BLINK = False
 frames += [blink(p) for p in ('stand', 'sit', 'front')]   # 81-83: an idle blink standing, sitting, sitting facing you
+def lap(p):   # drinking: the tongue flicks out into the water on B
+    g = hd2.compose(B, p)
+    if p == 'drinkB':
+        A = hd2.LAST_ANCHORS; x, y = int(A['mx'] + A['mrx'] - 1), int(A['my'] + 2)
+        for (dx, dy) in ((0, 0), (0, 1)):
+            if 0 <= y + dy < hd2.H and 0 <= x + dx < hd2.W: g[y + dy][x + dx] = '#e8798c'
+    return g
+frames += [frame('eatA'), frame('eatB'), lap('drinkA'), lap('drinkB'), frame('sniffA'), frame('sniffB'), frame('stretchB')]   # 84-90: eat, drink, sniff, back stretch
 W, H = hd2.W, hd2.H
 rows = []
 for y in range(H):

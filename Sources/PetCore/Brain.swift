@@ -172,6 +172,8 @@ public struct Brain: Sendable {
         finish(); start(act, target: target, env)
         if act == .kennel, s.objects.contains(where: { $0.id == target }) { s.activity.running = true }
         if act == .sleep { s.needs.tiredness = max(s.needs.tiredness, 0.6); s.nextDream = s.time + 4 }   // dream soon, for testing
+        if act == .eat { s.needs.hunger = max(s.needs.hunger, 0.7) }      // hungry enough to watch a whole meal, for testing
+        if act == .drink { s.needs.thirst = max(s.needs.thirst, 0.7) }
         else { s.wagUntil = s.time + 6 }   // wag straight away, for testing
     }
 
@@ -199,7 +201,9 @@ public struct Brain: Sendable {
             switch a.act {
             case .sleep: anim = .sleep
             case .sit, .greet, .groom: anim = .sit
-            case .eat, .drink, .sniff: anim = .headDown
+            case .eat: anim = .eat
+            case .drink: anim = .drink
+            case .sniff: anim = .sniff
             case .play: anim = .play
             case .stretch: anim = .stretch
             case .react: anim = .hop
@@ -236,6 +240,8 @@ public struct Brain: Sendable {
             pose.fall = s.fallKind == .trip ? .trip : t < 0.15 ? .trip : t < 0.45 ? .roll : t < 1.3 ? .sprawl : t < 1.5 ? .up : .sheepish
         }
         if a.act == .groom && a.destX == nil { pose.groom = a.groom }
+        if a.act == .eat || a.act == .drink { pose.pace = eatPace }
+        if a.act == .stretch { pose.stretchBack = s.time - a.started > 1.4 }   // front stretch first, then the hind legs
         pose.wag = pose.fall == nil && anim != .sleep && (s.time < (s.wagUntil ?? 0) || a.act == .greet)   // always wags hello
         return pose
     }
@@ -356,7 +362,8 @@ public struct Brain: Sendable {
         lastScores = c.sorted { $0.score > $1.score }.prefix(6).map { "\($0.act.rawValue)\($0.target.map { ":" + $0 } ?? "") \(String(format: "%.2f", $0.score))" }
         let pick: Candidate
         if rand(0...1) < 0.03 {
-            pick = c[Int.random(in: c.indices, using: &s.rng)] // got distracted
+            let open = c.filter { $0.score > 0 }   // got distracted (never into something ruled out, like zoomies under Reduce Motion)
+            pick = open.isEmpty ? c[0] : open[Int.random(in: open.indices, using: &s.rng)]
         } else {
             let w = c.map { pow(max($0.score, 1e-6), 1.5) }
             var r = rand(0...w.reduce(0, +))
@@ -399,6 +406,8 @@ public struct Brain: Sendable {
             a.running = env.cursorX.map { abs($0 - s.x) > 180 } ?? false   // far away: run to catch up
         default: break
         }
+        if act == .eat || act == .drink { a.remaining /= eatPace }   // gulpers are done quickly, dawdlers take their time
+        a.total = a.remaining
         a.destX = a.destX.map { min(max($0, env.minX), env.maxX) }
         if let d = a.destX, abs(d - s.x) < 2 { a.destX = nil; s.x = d }
         if act == .sniff, let o, novelty(o) > 0.3, s.emote == nil { setEmote("?", 3) }
@@ -436,10 +445,10 @@ public struct Brain: Sendable {
     mutating func perform(_ a: inout Activity, _ dt: Double, _ env: Environment) {
         switch a.act {
         case .eat:
-            s.needs.hunger -= dt / 20
+            s.needs.hunger -= dt / 20 * eatPace
             if s.needs.hunger <= 0 { a.remaining = 0 }
         case .drink:
-            s.needs.thirst -= dt / 8
+            s.needs.thirst -= dt / 8 * eatPace
             if s.needs.thirst <= 0 { a.remaining = 0 }
         case .play:
             s.needs.boredom -= dt / 40
@@ -570,6 +579,17 @@ public struct Brain: Sendable {
     }
 
     // MARK: - Jumps and the cursor
+
+    /// How fast it eats and drinks: energetic, eager dogs gulp (up to ~1.6×); lazy ones dawdle (down to ~0.55×).
+    public var eatPace: Double { let p = s.personality; return 0.55 + 0.7 * p.energy + 0.35 * (1 - p.laziness) }
+
+    /// How full the food bowl looks, 0...1: it empties as it eats and is refilled a few minutes after the meal.
+    public var foodLeft: Double {
+        let a = s.activity
+        if a.act == .eat, a.destX == nil, let total = a.total, total > 0 { return max(0, min(1, a.remaining / total)) }
+        if let t = s.lastDone[.eat], s.time - t < 300 { return 0 }
+        return 1
+    }
 
     /// 0 (needs unmet) ... 1 (fed, watered, rested, entertained).
     public var mood: Double {

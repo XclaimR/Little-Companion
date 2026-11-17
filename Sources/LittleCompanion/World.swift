@@ -8,6 +8,7 @@ import QuartzCore
     let panel: DesktopPanel
     let dogLayer = CALayer(), emoteLayer = CATextLayer(), debugLayer = CATextLayer(), ledgeLayer = CALayer()
     var objectLayers: [String: CALayer] = [:]
+    var objectArt: [String: String] = [:]   // which picture each object shows (the bowls change)
     var kennelFront: CALayer?
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
     var bedRims: [String: CALayer] = [:]
@@ -114,8 +115,10 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .zoomies, nil), (12, .groom, nil), (26, .greet, nil), (32, .sit, nil), (40, .wander, nil), (48, .play, "ball"), (59, .carry, "rope")]
-            for (at, tumble) in [(6.0, true), (9.5, false)] {   // mid-zoomies: one tumble, one trip
+            if let food = brain.s.objects.first(where: { $0.kind == .foodBowl }) { brain.s.x = food.x + 70 }   // start the tour by the bowls
+            let steps: [(TimeInterval, Act, String?)] = [(1, .eat, "food"), (16, .drink, "water"), (26, .sniff, "rope"), (33, .stretch, nil),
+                                                         (38, .zoomies, nil), (49, .groom, nil), (63, .greet, nil), (69, .sit, nil), (77, .wander, nil), (85, .play, "ball"), (96, .carry, "rope")]
+            for (at, tumble) in [(43.0, true), (46.5, false)] {   // mid-zoomies: one tumble, one trip
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.brain.debugFall(tumble: tumble) } }
             }
             for (at, act, target) in steps {
@@ -300,6 +303,7 @@ import QuartzCore
         if !isHidden && !occluded { render(p) }
         var interval: TimeInterval = switch p.anim {
         case .walk, .run, .zoom, .play, .hop: 1.0 / 20
+        case .eat, .drink, .sniff: 1.0 / 12
         case .sleep: 1.0
         default: 0.2 // brain at 5 Hz; nothing redraws unless something changed
         }
@@ -364,7 +368,10 @@ import QuartzCore
         case .play:
             if p.play == .shake { return Int(t * 6) % 2 == 0 ? .shakeA : .shakeB }   // shaking the toy in its mouth
             return Int(t * 3) % 2 == 0 ? .pawUp : .stand                               // batting at the ball
-        case .stretch, .headDown: return .bow   // shortcut: no head-down frame yet; the bow lowers the head
+        case .eat: return Int(t * 2.4 * p.pace) % 2 == 0 ? .eatA : .eatB                 // chewing, faster for gulpers
+        case .drink: return Int(t * 6 * p.pace) % 2 == 0 ? .drinkA : .drinkB              // lapping
+        case .sniff: return t.truncatingRemainder(dividingBy: 1.8) < 0.9 && Int(t * 8) % 2 == 0 ? .sniffB : .sniffA   // sniff-sniff, pause
+        case .stretch: return p.stretchBack ? .stretchB : .bow                            // front legs, then the hind legs
         case .stand, .hop:
             if p.attention == .head, let lx = p.lookX, (lx - p.x) * p.facing < 0 { return .look }   // glancing back at the cursor
             return .stand
@@ -441,8 +448,13 @@ import QuartzCore
         let ids = Set(brain.s.objects.map(\.id))
         for (id, l) in objectLayers where !ids.contains(id) { l.removeFromSuperlayer(); objectLayers[id] = nil }
         let mouthRow: CGFloat = frameIndex == DogSprite.Frame.shakeA.rawValue ? 13 : frameIndex == DogSprite.Frame.shakeB.rawValue ? 21 : 17
+        let food = brain.foodLeft
+        let lapping = p.anim == .drink && Int(CACurrentMediaTime() * 3 * p.pace) % 2 == 0
         for o in brain.s.objects {
-            let (img, size) = ObjectSprite.image(id: o.id, kind: o.kind.rawValue)
+            // the bowls show what's going on: food going down as it eats (refilled a little later), ripples as it drinks
+            let art = o.kind == .foodBowl ? (food > 0.66 ? "foodBowl" : food > 0.2 ? "foodBowlHalf" : "foodBowlEmpty")
+                    : o.kind == .waterBowl && lapping ? "waterBowlRipple" : o.kind.rawValue
+            let (img, size) = ObjectSprite.image(id: o.id, kind: art)
             let l = objectLayers[o.id] ?? {
                 let l = CALayer()
                 l.contents = img; l.anchorPoint = .zero
@@ -452,6 +464,7 @@ import QuartzCore
                 root.addSublayer(l); objectLayers[o.id] = l
                 return l
             }()
+            if objectArt[o.id] != art { objectArt[o.id] = art; l.contents = img }
             let held = o.id == p.carrying
             let baked = held && p.holding != nil   // drawn into the dog's frame instead
             if l.isHidden != baked { l.isHidden = baked }

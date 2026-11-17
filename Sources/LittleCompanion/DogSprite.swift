@@ -9,7 +9,8 @@ enum DogSprite {
         case wagStandA = 55, wagStandB, wagSitA, wagSitB, wagFrontA, wagFrontB, wagBackA, wagBackB,   // after the 32 baked toy frames
              wagWalkA1, wagWalkA2, wagWalkB1, wagWalkB2, wagLookA, wagLookB, wagBowA, wagBowB,
              jumpCrouch, jumpUp, jumpDown, trip, tumbleRoll, tumbleSprawl, lickA, lickB, scratchA, scratchB,
-             blinkStand, blinkSit, blinkFront
+             blinkStand, blinkSit, blinkFront,
+             eatA, eatB, drinkA, drinkB, sniffA, sniffB, stretchB
 
         /// The same pose with its eyes shut for an idle blink; nil if this pose has no blink art.
         var blinking: Frame? {

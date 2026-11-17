@@ -61,13 +61,17 @@ def compose(breed, pose):
     marks = P['marks']
     A = {}   # anchors used by markings
 
-    if pose in ('stand', 'walkA', 'walkB', 'pawUp', 'shakeA', 'shakeB', 'crouch'):
+    HEADDOWN = ('eatA', 'eatB', 'drinkA', 'drinkB', 'sniffA', 'sniffB')
+    if pose in ('stand', 'walkA', 'walkB', 'pawUp', 'shakeA', 'shakeB', 'crouch', 'stretchB') + HEADDOWN:
         cx = 22 - (L - 13) * 0.7
         cy = FLOOR - legH - ry + 1.5 + (3 if pose == 'crouch' else 0)   # crouch: gathering itself to spring / soaking up a landing
         if pose == 'walkB': cy -= 0.6
         top = cy + ry - 1.5
         bx, fx = cx - L + 1, cx + L - 5
-        if walk:   # legs swing from the hip and shoulder (far pair opposite the near pair)
+        if pose == 'stretchB':   # the back stretch: hind legs pushed out behind
+            sleg('farback', bx + 6, top + 1, bx + 1, w=3, far=True)
+            leg('farfront', fx + 4, top, FLOOR - 2, w=3, far=True)
+        elif walk:   # legs swing from the hip and shoulder (far pair opposite the near pair)
             sleg('farback', bx + 6, top + 1, bx + 6 - 3 * walk, w=3, far=True)
             sleg('farfront', fx + 4, top, fx + 4 + 3 * walk, w=3, far=True)
         else:
@@ -81,10 +85,14 @@ def compose(breed, pose):
         hy += {'pawUp': 3.5, 'shakeA': -2, 'shakeB': 2.5, 'crouch': 1}.get(pose, 0)   # head down at the ball / flicking a toy up / down
         hx += {'pawUp': .5, 'shakeB': .5}.get(pose, 0)
         if walk: hy += .8 if walk == 1 else -.4   # the head bobs a whole pixel against the body
+        if pose.startswith(('eat', 'drink')): hx -= .5; hy = 24 - (1 if pose == 'eatB' else 0)   # muzzle down in the bowl, chewing
+        if pose.startswith('sniff'): hx += .5 + (.6 if pose == 'sniffB' else 0); hy = 21.5        # nose low, twitching
+        if pose == 'stretchB': hy -= 1
         chx = cx + L - 0.5
         poly('neck', [(hx - 7, hy + .5), (hx + 1, hy - 1.5), (chx + 4.5, cy + 1.5), (chx - 5.5, cy + .5)], (chx, cy - 3, 6, 7))
         ell('chest', chx, cy, 4.6, ry)
-        if walk: sleg('legBN', bx, top, bx + 3 * walk, paw=-1)
+        if pose == 'stretchB': sleg('legBN', bx, top, bx - 6, paw=-1)
+        elif walk: sleg('legBN', bx, top, bx + 3 * walk, paw=-1)
         else: leg('legBN', bx, top, FLOOR - 2, paw=-1)
         if pose == 'pawUp':   # near front paw raised, reaching forward to bat at the ball
             zones['legFN'] = ('leg', fx, 4, False)
@@ -225,6 +233,8 @@ def compose(breed, pose):
     mx, my = (hx + hrx - .5, FLOOR - .6) if sleeping else (hx + hrx, hy + 2.7)
     if pose == 'shakeA': mx, my = hx + hrx - .3, hy + 1.2   # muzzle tipped up
     if pose == 'shakeB': mx, my = hx + hrx - .2, hy + 3.4   # muzzle tipped down
+    if pose.startswith(('eat', 'drink')): mx, my = hx + hrx - .6, hy + 3.6   # nose in the bowl
+    if pose.startswith('sniff'): mx, my = hx + hrx + (.5 if pose == 'sniffB' else 0), hy + 3
     ell('muzzle', mx, my, mrx, mry * (.85 if sleeping else 1))
     A.update(mx=mx, my=my)
     P = dict(P, _gait=('zoom' if pose.startswith('zoom') else 'run' if pose.startswith('run') or pose in ('shakeA', 'sleepT') else None))
