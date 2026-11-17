@@ -16,6 +16,9 @@ import QuartzCore
     var last = CACurrentMediaTime()
     var spriteKey = "", dogOrigin = CGPoint(x: -1, y: -1), emoteText = ""
     let debug = ProcessInfo.processInfo.environment["LC_DEBUG"] != nil
+    /// LC_LOG=1 prints every activity change, jump and cursor reaction (for watching behaviour in tests).
+    let log = ProcessInfo.processInfo.environment["LC_LOG"] != nil
+    var logged = (started: -1.0, jump: false, attention: "", pose: "")
     /// LC_SPEED=10 runs the dog's life 10× faster, for testing behaviour (walking looks fast too).
     let speed = max(0.1, Double(ProcessInfo.processInfo.environment["LC_SPEED"] ?? "") ?? 1)
 
@@ -99,7 +102,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .sleep, "bed"), (14, .sleep, "bed"), (27, .sleep, "bed"), (40, .kennel, "kennel")]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .carry, "ball"), (14, .play, "plush"), (40, .play, "ball"), (62, .carry, "rope")]
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -107,6 +110,27 @@ import QuartzCore
     }
 
     func save() { Store.save(brain.s) }
+
+    func logChanges() {
+        let s = brain.s, a = s.activity, p = brain.pose
+        var line = [String]()
+        if a.started != logged.started {
+            logged.started = a.started
+            var d = "\(a.act.rawValue)" + (a.target.map { " → \($0)" } ?? "")
+            if a.running == true { d += " (running)" }
+            if a.act == .sit { d += a.front == true ? " facing you" : a.back == true ? " facing away" : " side-on" }
+            line.append(d)
+        }
+        let extra = [p.sleepPos.map { "sleep:\($0)" }, p.inBed.map { _ in "in bed" }, p.play, a.phase.map { "kennel:\($0)" }].compactMap { $0 }.joined(separator: " ")
+        if extra != logged.pose { logged.pose = extra; if !extra.isEmpty { line.append("[\(extra)]") } }
+        if (s.jumpAt != nil) != logged.jump { logged.jump = s.jumpAt != nil; if logged.jump { line.append("JUMP") } }
+        if (s.attention ?? "") != logged.attention { logged.attention = s.attention ?? ""; if let at = s.attention { line.append("cursor:\(at)") } }
+        if s.twitchUntil > s.time && p.anim == .sleep && !line.contains("twitch") { }
+        guard !line.isEmpty else { return }
+        let n = s.needs
+        print(String(format: "%7.0fs  %@   (hungry %.2f tired %.2f bored %.2f)", s.time, line.joined(separator: "  "), n.hunger, n.tiredness, n.boredom))
+        fflush(stdout)
+    }
 
     /// Debug menu: make the dog do something now.
     func test(_ act: Act, _ target: String? = nil) {
@@ -147,6 +171,7 @@ import QuartzCore
         gap *= speed
         let env = environment()
         while gap > 0 { let step = min(gap, 1); brain.update(dt: step, env: env); gap -= step }
+        if log { logChanges() }
         render()
         var interval: TimeInterval = switch brain.pose.anim {
         case .walk, .run, .zoom, .play, .hop: 1.0 / 20
@@ -208,6 +233,20 @@ import QuartzCore
         let r = dogRect
         let t = CACurrentMediaTime()
         let frame = spriteFrame(p, time: t)
+        var index = frame.rawValue
+        if let toy = p.holding {   // the toy's own frame for whatever it's doing with it
+            var pose: Int = switch frame {
+            case .walkA: 0
+            case .walkB: 1
+            case .runA, .zoomA: 2
+            case .runB, .zoomB: 3
+            case .shakeA: 5
+            case .shakeB: 6
+            default: 4
+            }
+            if p.toss { pose = 7 }
+            index = DogSprite.toyFrame(toy, pose) ?? index
+        }
         let origin = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
         let rawEmote = p.emote ?? ""
 
@@ -217,10 +256,10 @@ import QuartzCore
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
         let kennelX = brain.s.objects.first { $0.kind == .kennel }.map { CGFloat($0.x) }
         let shadow = p.inKennel && kennelX.map { CGFloat(p.x) < $0 + 13 } == true   // fully past the open end: only its shadow shows
-        let key = "\(frame.rawValue)\(p.facing)" + (shadow ? "s" : "")
+        let key = "\(index)\(p.facing)" + (shadow ? "s" : "")
         if key != spriteKey {
             spriteKey = key
-            dogLayer.contents = shadow ? DogSprite.silhouette(frame, facing: CGFloat(p.facing)) : DogSprite.image(frame, facing: CGFloat(p.facing))
+            dogLayer.contents = shadow ? DogSprite.silhouette(index, facing: CGFloat(p.facing)) : DogSprite.image(index, facing: CGFloat(p.facing))
         }
         let snoozing = rawEmote == "z"   // asleep: floating z's instead of the static emote
         if zzzLayer.isHidden == snoozing { zzzLayer.isHidden = !snoozing }
@@ -257,6 +296,8 @@ import QuartzCore
                 return l
             }()
             let held = o.id == carrying
+            let baked = held && brain.pose.holding != nil   // drawn into the dog's frame instead
+            if l.isHidden != baked { l.isHidden = baked }
             let mouthRow: CGFloat = spriteKey.hasPrefix("\(DogSprite.Frame.shakeA.rawValue)") ? 13 : spriteKey.hasPrefix("\(DogSprite.Frame.shakeB.rawValue)") ? 21 : 17
             let bottom = held ? dog.minY + mouthRow * DogSprite.pointsPerPixel : floorY // carried toys ride in its mouth
             let sink: CGFloat = o.kind == .kennel ? DogSprite.footRows * DogSprite.pointsPerPixel : 0   // kennel walls reach the dog's lowest outline row

@@ -20,11 +20,17 @@ enum DogSprite {
     }()
     nonisolated(unsafe) private static var cache: [String: CGImage] = [:]
 
-    static func image(_ frame: Frame, facing dir: CGFloat) -> CGImage {
-        let key = "\(frame.rawValue)\(dir)"
+    static func image(_ frame: Frame, facing dir: CGFloat) -> CGImage { image(frame.rawValue, facing: dir) }
+
+    /// Ollie holding a toy: frames 23 + toy×8 + pose (walk A/B, run A/B, stand, shake up/down, toss).
+    static let toys = ["ball", "tennis", "plush", "rope"]
+    static func toyFrame(_ toy: String, _ pose: Int) -> Int? { toys.firstIndex(of: toy).map { 23 + $0 * 8 + pose } }
+
+    static func image(_ index: Int, facing dir: CGFloat) -> CGImage {
+        let key = "\(index)\(dir)"
         if let img = cache[key] { return img }
         let w = Int(pixels.width), h = Int(pixels.height)
-        var img = sheet.cropping(to: CGRect(x: frame.rawValue * w, y: 0, width: w, height: h))!
+        var img = sheet.cropping(to: CGRect(x: index * w, y: 0, width: w, height: h))!
         if dir < 0 {   // mirror for facing left
             let c = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                               space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -37,10 +43,10 @@ enum DogSprite {
     }
 
     /// The same frame as a soft dark shadow: how it looks through the kennel window.
-    static func silhouette(_ frame: Frame, facing dir: CGFloat) -> CGImage {
-        let key = "s\(frame.rawValue)\(dir)"
+    static func silhouette(_ index: Int, facing dir: CGFloat) -> CGImage {
+        let key = "s\(index)\(dir)"
         if let img = cache[key] { return img }
-        let src = image(frame, facing: dir)
+        let src = image(index, facing: dir)
         let c = CGContext(data: nil, width: src.width, height: src.height, bitsPerComponent: 8, bytesPerRow: 0,
                           space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         let r = CGRect(x: 0, y: 0, width: src.width, height: src.height)

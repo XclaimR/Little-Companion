@@ -33,6 +33,10 @@ public struct Brain: Sendable {
         if let at = s.jumpAt, s.time - at >= (s.jumpLen ?? 0) { s.jumpAt = nil }
         updateAttention(dt, env: env)
         maybeJump(dt, circ: circ)
+        if s.carrying != nil, s.jumpAt == nil, s.activity.act == .carry || s.activity.act == .play,
+           rand(0...1) < dt * 0.12 * (0.3 + s.personality.playfulness) * mood {
+            s.tossUntil = s.time + 0.7; jump(height: 10, length: 0.5)   // flings it up and catches it
+        }
 
         if s.time >= s.nextInterruptCheck {
             s.nextInterruptCheck = s.time + 3
@@ -157,6 +161,10 @@ public struct Brain: Sendable {
         var pose = Pose(x: s.x, facing: s.facing, anim: anim, carrying: s.carrying, emote: emote, twitch: s.time < s.twitchUntil)
         if let at = s.jumpAt, let len = s.jumpLen, len > 0 { pose.jump = min(1, max(0, (s.time - at) / len)); pose.jumpHeight = s.jumpHeight ?? 0 }
         pose.attention = s.attention
+        if let c = s.carrying, let o = s.objects.first(where: { $0.id == c }), o.kind.isToy {
+            pose.holding = o.id == "tennis" ? "tennis" : o.kind.rawValue
+            pose.toss = s.time < (s.tossUntil ?? 0)
+        }
         if a.act == .play, let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }) { pose.play = o.kind == .ball ? "chase" : "shake" }
         if a.act == .kennel && a.phase != "door" {
             pose.inKennel = true; pose.emote = nil
@@ -278,6 +286,10 @@ public struct Brain: Sendable {
     }
 
     mutating func decide(_ env: Environment) {
+        if let t = s.pendingCarry {
+            s.pendingCarry = nil
+            if s.objects.contains(where: { $0.id == t }) { start(.carry, target: t, env); return }
+        }
         let c = candidates(env)
         lastScores = c.sorted { $0.score > $1.score }.prefix(6).map { "\($0.act.rawValue)\($0.target.map { ":" + $0 } ?? "") \(String(format: "%.2f", $0.score))" }
         let pick: Candidate
@@ -350,6 +362,7 @@ public struct Brain: Sendable {
         case .carry where s.carrying == nil:
             s.carrying = a.target
             a.destX = rand(env.minX...env.maxX) // trot off somewhere with it
+            a.running = rand(0...1) < 0.2 + 0.4 * s.personality.playfulness * s.personality.energy
         case .zoomies where a.remaining > 0:
             a.destX = rand(env.minX...env.maxX)
         default: break
@@ -379,6 +392,9 @@ public struct Brain: Sendable {
                     }
                 } else {
                     s.carrying = id   // grab and shake (plush, rope)
+                    if rand(0...1) < dt * 0.15 {   // ...and wander a few steps with it in its mouth
+                        a.destX = min(max(s.x + (rand(0...1) < 0.5 ? -1 : 1) * rand(20...60), env.minX), env.maxX)
+                    }
                 }
             }
         case .sniff: s.needs.boredom -= dt / 200
@@ -403,6 +419,8 @@ public struct Brain: Sendable {
         let a = s.activity
         s.lastDone[a.act] = s.time
         if a.act == .carry || a.act == .play { s.carrying = nil }
+        if a.act == .play, let t = a.target, s.objects.first(where: { $0.id == t })?.kind == .ball,
+           rand(0...1) < 0.25 + 0.5 * s.personality.playfulness { s.pendingCarry = t }   // grabs the ball and trots off with it
         if a.act == .follow {
             if s.attention == "follow" { s.attention = nil; s.attentionUntil = nil }
             if rand(0...1) < 0.2 + 0.6 * s.personality.playfulness * mood { jump(height: 22 + 8 * s.personality.energy, length: 0.5) }   // pounce

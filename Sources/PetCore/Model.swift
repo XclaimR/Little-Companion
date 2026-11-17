@@ -128,6 +128,8 @@ public struct DogState: Codable, Sendable, Equatable {
     public var nextDream: Double?       // when the next dream (twitching) starts while asleep
     public var sleepPos: String?        // "flat", "curl", "side" or "belly"
     public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
+    public var tossUntil: Double?       // tossing the toy it's holding up in the air
+    public var pendingCarry: String?    // pick this toy up and trot off with it next
 }
 
 /// What the outside world tells the brain each tick.
@@ -163,4 +165,6 @@ public struct Pose: Sendable, Equatable {
     public var inKennel = false             // through the doorway or inside: the kennel's walls are in front of it
     public var sleepPos: String? = nil      // sleeping position while asleep
     public var inBed: String? = nil         // id of the bed it's lying in
+    public var holding: String? = nil       // toy art in its mouth: "ball", "tennis", "plush" or "rope"
+    public var toss = false                 // flinging the held toy up
 }

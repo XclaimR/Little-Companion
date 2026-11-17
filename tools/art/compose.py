@@ -218,6 +218,8 @@ def compose(breed, pose):
 
     draw_face(P, g, A, sleeping)
     if P.get('collar') and pose not in ('sleep', 'sleepT', 'bow'): draw_collar(g, A, pose)
+    global LAST_ANCHORS
+    LAST_ANCHORS = dict(A, mrx=P['muz'][0])   # mouth/head positions, for baking toys into frames
     return g
 
 def draw_tail(P, at, ell, poly, pose):
@@ -387,7 +389,7 @@ def png(path, frames, scale=6):
                 for x in range(W):
                     k = g[y][x]
                     if not k: continue
-                    hx = HEX[PAL[breed].get(k, PAL[breed]['b'])]
+                    hx = k if k.startswith('#') else HEX[PAL[breed].get(k, PAL[breed]['b'])]
                     c = tuple(int(hx[i:i + 2], 16) for i in (1, 3, 5))
                     for sy in range(scale):
                         for sx in range(scale):
