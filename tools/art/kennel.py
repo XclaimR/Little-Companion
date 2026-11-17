@@ -42,6 +42,23 @@ def kennel_back():
         for x in range(5, KW - 5): g[y][x] = 'f' if y >= KH - 3 else 'a'
     return g
 
+def bed():
+    """A roomy donut bed (54x18) that fits Ollie in any sleeping position."""
+    w, h = 54, 18
+    g = [[None] * w for _ in range(h)]
+    def ell(cx, cy, rx, ry, k, only=False):
+        for y in range(h):
+            for x in range(w):
+                if ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1 and (not only or g[y][x]): g[y][x] = k
+    ell(27, 9.5, 26, 8, 'r')                       # rim
+    ell(27, 8, 23, 4, 'L', True)                   # lit top of the rim
+    ell(27, 10.5, 21, 5, 'c')                      # cushion
+    ell(27, 9, 20, 2.6, 'C', True)                 # cushion shading toward the back
+    ell(27, 11, 20, 4, 'c', True)
+    for x in range(4, w - 4): g[15][x] = 'D'      # rim underside
+    for x in range(8, w - 8): g[16][x] = 'D'
+    return outline(g)
+
 def outline(g, skip=lambda x, y: False):
     H, W = len(g), len(g[0])
     out = [r[:] for r in g]
@@ -54,6 +71,7 @@ def outline(g, skip=lambda x, y: False):
 KEYS = {
     'kennelFront': dict(o='kennel-outline', r='kennel-roof', R='kennel-roofDark', L='kennel-roofLight', w='kennel-wood', W='kennel-woodDark', l='kennel-woodLight', p='kennel-plate', i='kennel-ink'),
     'kennelBack': dict(a='kennel-plate', f='kennel-woodLight'),
+    'bed': dict(o='bed-outline', r='bed-rim', L='bed-rimLight', D='bed-rimDark', c='bed-cushion', C='bed-cushionShade'),
 }
 
 if __name__ == '__main__':
@@ -61,8 +79,8 @@ if __name__ == '__main__':
     here = __file__.rsplit('/', 1)[0] or '.'
     hexes = json.load(open(here + '/palette.json'))
     items = json.load(open(here + '/objects_grids.json'))['items']
-    grids = {'kennelBack': kennel_back(), 'kennelFront': kennel_front()}
-    for k in ('bed', 'rug', 'window', 'plant', 'foodBowl', 'waterBowl', 'bone', 'ball', 'tennis', 'plush', 'rope'):
+    grids = {'kennelBack': kennel_back(), 'kennelFront': kennel_front(), 'bed': bed()}
+    for k in ('rug', 'window', 'plant', 'foodBowl', 'waterBowl', 'bone', 'ball', 'tennis', 'plush', 'rope'):
         it = items[k]
         grids[k] = [[None if ch == '.' else ch for ch in row.replace('|', '')] for row in it['rows']]
         KEYS[k] = {ch: tok for ch, tok in it['keys'].items() if ch != '.'}

@@ -97,7 +97,7 @@ import QuartzCore
         render()
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
-            let steps: [(TimeInterval, Act, String?)] = [(1, .kennel, "kennel"), (36, .sleep, "bed"), (52, .sleep, "bed"), (68, .sleep, "bed")]
+            let steps: [(TimeInterval, Act, String?)] = [(1, .sleep, "bed"), (14, .sleep, "bed"), (27, .sleep, "bed"), (40, .kennel, "kennel")]
             for (at, act, target) in steps {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
@@ -167,7 +167,7 @@ import QuartzCore
         var lift: CGFloat = 0
         if p.anim == .hop { lift = abs(sin(t * 7)) * 18 }
         if p.twitch && p.anim != .sleep { lift = 2 }
-        if p.inBed != nil { lift += 9 }   // lying on the cushion, not the floor
+        if p.inBed != nil { lift += 3 * DogSprite.pointsPerPixel }   // sunk into the cushion, the rim covering its lower body
         if let j = p.jump { lift += sin(j * .pi) * p.jumpHeight }
         if p.anim == .run || p.anim == .zoom { lift += Int(p.x / 16) % 2 == 0 ? 0 : 2 }   // gallop bounce
         let s = DogSprite.size
@@ -277,7 +277,7 @@ import QuartzCore
 
     /// The bed's front rim, drawn over the dog while it lies in that bed so it sits *in* the bed.
     func renderBedRim(_ bed: PetObject, over back: CALayer, size: CGSize, img: CGImage) {
-        let rows = 5   // bottom rows of the bed art: the front lip
+        let rows = 7   // bottom rows of the bed art: the front lip
         let rim = bedRims[bed.id] ?? {
             let l = CALayer()
             l.contents = img.cropping(to: CGRect(x: 0, y: img.height - rows, width: img.width, height: rows))
