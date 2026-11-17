@@ -22,7 +22,7 @@ https://github.com/user-attachments/assets/ea401cf8-5b84-4d99-8e57-911f039d2d7b
 
 
 
-*A Little Company: one workday with Ollie, 46 seconds with sound. Click the picture to play it.*
+*A Little Company: one workday with Ollie (and a visit from Mango), 46 seconds with sound.*
 
 ## Meet the dogs
 
