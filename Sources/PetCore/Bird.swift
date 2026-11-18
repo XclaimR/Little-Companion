@@ -39,14 +39,17 @@ public enum FlightStage: String, Sendable { case takeoff, flap, glide, flare, fa
 public enum Tree {
     public struct Ledge: Sendable { public var from, to, h: Double }
     static let k = 1.5
-    public static let branches = [Ledge(from: -26 * k, to: -12 * k, h: 44 * k),   // b0: the swing hangs from it
-                                  Ledge(from: 10 * k, to: 20 * k, h: 40 * k),     // b1: the bell hangs from its tip
-                                  Ledge(from: -26 * k, to: -14 * k, h: 64 * k),   // b2
-                                  Ledge(from: 8 * k, to: 22 * k, h: 66 * k)]      // b3, under the crown
+    // Perches stay clear of the cottage birdhouse (dx −15…15 between heights 46 and 75) so it never stands in front of its walls.
+    public static let branches = [Ledge(from: -26 * k, to: -17 * k, h: 44 * k),   // b0: the swing hangs from it
+                                  Ledge(from: 16 * k, to: 23 * k, h: 40 * k),     // b1: the bell hangs above its tip
+                                  Ledge(from: -27 * k, to: -20 * k, h: 64 * k),   // b2, beside the roof
+                                  Ledge(from: 19 * k, to: 24 * k, h: 66 * k)]     // b3, beside the roof, under the crown
     public static let swing = (dx: -19 * k, h: 10 * k)   // the seat
-    public static let bell = (dx: 12 * k, h: 40 * k)     // sitting on b1, beak level with the bell hanging from b3
-    public static let house = (dx: 0.0, h: 48 * k)        // the peg under the round entrance
-    public static let entrance = (dx: 0.0, h: 54 * k)     // centre of the entrance, where its shadow shows
+    public static let bell = (dx: 19 * k, h: 40 * k)     // sitting on b1, beak level with the bell hanging from b3
+    public static let house = (dx: -7 * k, h: 47 * k)     // the peg under the round door
+    public static let entrance = (dx: -7 * k, h: 54 * k)  // centre of the door
+    /// The curtained window (dx0, dx1, h0, h1 in points): its shadow shows here while it's inside, and the lamp glows in the evening.
+    public static let window = (dx0: 3 * k, dx1: 12 * k, h0: 49 * k, h1: 60 * k)
     public static let halfWidth = 32 * k
 }
 
