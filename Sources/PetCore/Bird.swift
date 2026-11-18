@@ -265,11 +265,11 @@ extension Brain {
             c.append(.init(act: .hunt, target: nil, score: pow(n.hunger, 2) * 5 * (n.hunger < 0.25 ? 0.05 : 1)))
             if object(.mouse) != nil { c.append(.init(act: .hunt, target: "mouse", score: 0.3 * fun * (0.4 + p.curiosity))) }
             if Oak.lit(env.hour) {   // the lantern: it likes to sit by it at night, and goes there first when it comes out after dark
-                let justOut = s.time - max(s.lastDone[.sleep] ?? -1e9, s.lastDone[.kennel] ?? -1e9) < 60
-                c.append(.init(act: .idle, target: "lantern", score: justOut ? 4 : 0.15 * night))
+                let justUp = s.time - (s.lastDone[.sleep] ?? -1e9) < 60 && s.perch == "house"   // out of the knothole after a proper sleep
+                c.append(.init(act: .idle, target: "lantern", score: justUp ? 4 : s.perch == "b2" ? 0.15 * night : 0.05 * night))
             }
             if object(.pinecone) != nil { c.append(.init(act: .play, target: "pinecone", score: 0.25 * fun)) }
-            if object(.mouse) != nil { c.append(.init(act: .carry, target: "mouse", score: 0.06 * fun)) }   // up a branch with it, then flings it down
+            if object(.mouse) != nil { c.append(.init(act: .carry, target: "mouse", score: 0.035 * fun)) }   // up a branch with it, then flings it down
             let h = env.hour, twilight = (h >= 18.5 && h < 21.5) || (h >= 4.5 && h < 7)
             c.append(.init(act: .hoot, target: nil, score: (twilight ? 0.6 : 0.03) * (0.4 + p.independence) * (1 - circ)))
         } else {
@@ -279,6 +279,13 @@ extension Brain {
         }
         let onGround = s.perch == "floor" || s.perch == "log" || windowID(s.perch) != nil
         c.append(.init(act: .fly, target: nil, score: (isOwl ? 0.11 : 0.18) * (0.2 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.85 * circ)))   // energetic birds fly more; owls less
+        // A joy flight: swooping about the desktop without landing, when it's lively, rested and happy. At most every half hour.
+        let screenArea = (env.maxX - env.minX + 80) * max(1, env.floorY - env.topY)
+        let covered = env.windows.reduce(0) { $0 + $1.box.w * $1.box.h } / screenArea   // overlaps count twice: a rough measure is enough
+        let clearDesktop = env.windows.count <= 2 || covered < 0.35   // only when it'll be seen, not mostly behind your work
+        if !calm, clearDesktop, s.time - (s.lastDone[.zoomies] ?? -1e9) > 1800 {
+            c.append(.init(act: .zoomies, target: nil, score: 0.25 * p.energy * pow(1 - n.tiredness, 2) * (0.3 + n.boredom) * mood * night))
+        }
         c.append(.init(act: .hop, target: nil, score: 0.3 * (0.4 + p.energy) * (onGround ? 1 : 0.4) * (1 - 0.85 * circ)))
         c.append(.init(act: .peck, target: nil, score: 0.25 * (0.3 + p.curiosity) * (0.5 + n.hunger) * (onGround ? 1 : 0.3) * (1 - 0.8 * circ)))
         c.append(.init(act: .idle, target: nil, score: 0.6 * (0.5 + p.laziness) * calmNight))
@@ -304,6 +311,13 @@ extension Brain {
         let here = s.perch ?? "air", fy = env.floorY   // no perch: its window just went from under it
         var spot: Spot?
         switch act {
+        case .zoomies:   // swoops from one point in the air to the next across the whole desktop, then settles on a perch
+            a.phase = "laps:\(Int(rand(6...12.99)))"
+            s.activity = a
+            flyTo(zoomPoint(env), env)
+            s.flight?.len = 1e9                                          // a joy flight is steered, not a fixed curve (see flyTick)
+            s.zoomVX = s.facing * 0.75 * Brain.zoomSpeed; s.zoomVY = -0.66 * Brain.zoomSpeed   // up and away
+            return
         case .fly:
             spot = choosePerch(env, nearYou: target == "you")
             if target == "you" { s.lastNearYou = s.time }
@@ -358,6 +372,8 @@ extension Brain {
     mutating func birdArrive(_ a: inout Activity, _ env: Environment) {
         if let o = s.objects.first(where: { $0.id == a.target }), a.act != .splash { s.facing = o.x >= s.x ? 1 : -1 }
         if a.act == .bell { s.facing = 1 }
+        if a.act == .zoomies { a.phase = "settled"; a.remaining = rand(2...4) }   // catches its breath
+        if a.act == .groom { a.phase = "preen"; s.boutUntil = s.time + preenBout() }
         if a.act == .hunt { s.huntAt = s.time; a.remaining = a.target == "mouse" ? 8 : 30; a.phase = nil }
         if a.target == "lantern" { s.facing = 1; a.front = false }   // facing the light
         if a.act == .carry {   // picks its toy up in its beak and flies about with it, perch to perch, then drops it in mid-flight
@@ -431,6 +447,15 @@ extension Brain {
             }
         case .kennel: if a.kennel == .inside && s.needs.tiredness > 0.3 { dreamTick() }
         case .lookAround: if rand(0...1) < dt * 0.6 { s.facing = -s.facing }
+        case .groom:   // preens in bouts; after one, a curious bird often stops to look round, others mostly preen on
+            if s.time >= (s.boutUntil ?? 0) {
+                if a.phase == "look" || rand(0...1) > 0.15 + 0.7 * s.personality.curiosity {
+                    a.phase = "preen"; s.boutUntil = s.time + preenBout()
+                } else {
+                    a.phase = "look"; s.boutUntil = s.time + rand(2...5)
+                }
+            }
+            if a.phase == "look" && rand(0...1) < dt * 0.5 { s.facing = -s.facing }
         case .idle: if rand(0...1) < dt * 0.05 { a.front = rand(0...1) < 0.2 + 0.3 * s.personality.affection; if a.front != true, rand(0...1) < 0.5 { s.facing = -s.facing } }
         case .hop, .peck:
             if rand(0...1) < dt * (a.act == .hop ? 0.6 : 0.15), let r = perchRange(s.perch ?? "floor", env) {   // a few more hops along
@@ -450,7 +475,27 @@ extension Brain {
 
     /// Off to a spot. Of a few arcs it takes the one most out in the open (through the gaps between windows);
     /// if there's none, it is glimpsed passing behind them.
-    mutating func flyTo(_ spot: Spot, _ env: Environment, takeoff: Bool = true) {
+    static let zoomSpeed = 320.0
+    /// A point in the open air somewhere across the desktop, well away from where it is now: a waypoint for a joy flight.
+    /// `heading`: the way it's flying now; points roughly ahead are preferred, so it swoops on rather than doubling back.
+    mutating func zoomPoint(_ env: Environment, heading: (Double, Double)? = nil) -> Spot {
+        let y0 = s.y ?? env.floorY
+        var best = Spot(perch: "zoom", x: s.x, y: y0), bestScore = -1.0
+        for _ in 0..<10 {
+            // waypoints keep well in from the edges, so it always has room to swoop round on to the next
+            let p = Spot(perch: "zoom", x: rand((env.minX + 160)...max(env.minX + 160, env.maxX - 160)), y: rand((env.topY + 120)...max(env.topY + 120, env.floorY - 120)))
+            let d = hypot(p.x - s.x, p.y - y0)
+            var ahead = 1.0
+            if let (hx, hy) = heading, d > 0 { ahead = (1 + ((p.x - s.x) * hx + (p.y - y0) * hy) / (d * max(1e-6, hypot(hx, hy)))) / 2 }
+            let score = ahead < 0.4 ? d * 0.01 : d * (0.2 + 0.8 * ahead)   // nothing behind it, unless that's all there is
+            if score > bestScore { bestScore = score; best = p }
+        }
+        return best
+    }
+    /// How long a preening bout lasts: laid-back birds settle into it for longer.
+    mutating func preenBout() -> Double { rand(3...8) * (0.7 + 0.8 * s.personality.laziness) }
+    /// `heading`: carry on in this direction from where it is (a joy flight swooping on to its next waypoint), instead of picking an arc.
+    mutating func flyTo(_ spot: Spot, _ env: Environment, takeoff: Bool = true, speed: Double = Brain.flySpeed, heading: (Double, Double)? = nil) {
         let x0 = s.x, y0 = s.y ?? env.floorY
         let dist = hypot(spot.x - x0, spot.y - y0)
         var best: (vx: Double, vy: Double, cost: Double) = ((x0 + spot.x) / 2, min(y0, spot.y), .infinity)
@@ -462,13 +507,43 @@ extension Brain {
             if cost < best.cost { best = (vx, vy, cost) }
         }
         s.flight = Flight(kind: .fly, x0: x0, y0: y0, x1: spot.x, y1: spot.y, vx: best.vx, vy: best.vy,
-                          start: s.time + (takeoff ? Brain.takeoff : 0), len: max(0.8, dist / Brain.flySpeed + 0.3), to: spot.perch, dx: spot.dx)
+                          start: s.time + (takeoff ? Brain.takeoff : 0), len: max(0.8, dist / speed + 0.3), to: spot.perch, dx: spot.dx)
+        if let (hx, hy) = heading {   // a smooth turn: the new curve leaves along the old one's direction
+            let n = max(1e-6, hypot(hx, hy)), ux = hx / n, uy = hy / n
+            // near an edge the guide point may overshoot by up to 80 pt (the path itself only gets half as far), never bent sideways
+            var k = dist * 0.45, m = 80.0
+            if ux > 0 { k = min(k, (env.maxX + m - x0) / ux) } else if ux < 0 { k = min(k, (env.minX - m - x0) / ux) }
+            if uy > 0 { k = min(k, (env.floorY - y0) / uy) } else if uy < 0 { k = min(k, (env.topY - y0) / uy) }   // never below the floor, nor into the menu bar
+            k = max(min(dist * 0.25, 60), k)
+            s.flight!.vx = x0 + ux * k; s.flight!.vy = y0 + uy * k
+        }
         s.perch = nil; s.perchDX = nil; s.rideSince = nil; s.coveredSince = nil; s.jumpAt = nil
         if abs(spot.x - x0) > 2 { s.facing = spot.x > x0 ? 1 : -1 }
     }
 
-    mutating func flyTick(_ env: Environment) {
+    mutating func flyTick(_ env: Environment, _ dt: Double = 0.05) {
         guard var f = s.flight else { return }
+        if f.kind == .fly && f.to == "zoom" {   // a joy flight: steer towards the waypoint, turning at most 2.6 rad/s (a turning circle ~150 pt)
+            s.flight = f
+            guard s.time >= f.start else { return }   // crouched, about to spring
+            let y = s.y ?? env.floorY
+            var tx = f.x1 - s.x, ty = f.y1 - y
+            // shy of the edges: near one, it's pulled back towards the middle (so it never scrapes along the menu bar or the Dock)
+            var nearEdge = false
+            if y - env.topY < 190 { ty += 420; nearEdge = true } else if env.floorY - y < 150 && s.time - s.activity.started > 1.5 { ty -= 420; nearEdge = true }   // (not while it's climbing off the floor)
+            if s.x - env.minX < 160 { tx += 420; nearEdge = true } else if env.maxX - s.x < 160 { tx -= 420; nearEdge = true }
+            let cur = atan2(s.zoomVY ?? -1, s.zoomVX ?? 0)
+            var d = atan2(ty, tx) - cur
+            while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
+            let rate = nearEdge ? 4.5 : 2.6   // banks hard near an edge
+            let a = cur + max(-rate * dt, min(rate * dt, d)), sp = Brain.zoomSpeed
+            s.zoomVX = cos(a) * sp; s.zoomVY = sin(a) * sp
+            s.x = min(max(s.x + s.zoomVX! * dt, env.minX - 20), env.maxX + 20)
+            s.y = min(max(y + s.zoomVY! * dt, env.topY + 20), env.floorY - 20)
+            if abs(s.zoomVX!) > 5 { s.facing = s.zoomVX! > 0 ? 1 : -1 }
+            if hypot(f.x1 - s.x, f.y1 - y) < 60 || s.time - f.start > 6 { land(f, env) }   // reached it (or circled long enough): on to the next
+            return
+        }
         if f.kind == .fly, let id = windowID(f.to) {   // landing on a window that may move, or go
             if let w = env.windows.first(where: { $0.id == id }) { f.x1 = w.box.x + (f.dx ?? 0); f.y1 = w.box.y }
             else {
@@ -498,7 +573,7 @@ extension Brain {
 
     mutating func land(_ f: Flight, _ env: Environment) {
         s.flight = nil
-        s.x = f.x1; s.y = f.y1
+        if f.to != "zoom" { s.x = f.x1; s.y = f.y1 }   // a joy flight's waypoints are passed through, not landed on
         if f.kind == .fall && f.to.isEmpty {   // caught itself in mid-air: a few hard flaps
             s.flight = Flight(kind: .recover, x0: s.x, y0: f.y1, x1: s.x + s.facing * 18, y1: f.y1 - 16, vx: s.x, vy: f.y1, start: s.time, len: 0.7, to: "")
             return
@@ -506,6 +581,26 @@ extension Brain {
         if f.kind == .recover {   // and off to somewhere steadier
             if let spot = choosePerch(env) { flyTo(spot, env, takeoff: false) }
             else { flyTo(Spot(perch: "floor", x: min(max(s.x, env.minX), treeX - 60), y: env.floorY), env, takeoff: false) }
+            return
+        }
+        if f.to == "zoom" {   // a waypoint in mid-air: swoop on to the next, or down to a perch when the laps are done
+            let laps = (s.activity.phase.flatMap { Int($0.dropFirst("laps:".count)) } ?? 1) - 1
+            s.activity.phase = "laps:\(laps)"
+            let heading = (s.zoomVX ?? 0, s.zoomVY ?? -1)   // the way it's flying
+            if laps > 0 {
+                flyTo(zoomPoint(env, heading: heading), env, takeoff: false)
+                s.flight?.len = 1e9
+            } else {   // down to the perch most ahead of it
+                var best: Spot? = nil, score = -2.0
+                for _ in 0..<5 {
+                    guard let c = choosePerch(env) else { continue }
+                    let dx = c.x - s.x, dy = c.y - (s.y ?? env.floorY), n = max(1, hypot(dx, dy))
+                    let ahead = (dx * heading.0 + dy * heading.1) / (n * max(1e-6, hypot(heading.0, heading.1)))
+                    if ahead > score { score = ahead; best = c }
+                }
+                s.zoomVX = nil; s.zoomVY = nil
+                flyTo(best ?? Spot(perch: "floor", x: min(max(s.x, env.minX), treeX - 60), y: env.floorY), env, takeoff: false, heading: heading)
+            }
             return
         }
         s.perch = f.to; s.perchDX = f.dx
@@ -590,7 +685,7 @@ extension Brain {
         if let at = s.jumpAt, s.time - at >= (s.jumpLen ?? 0) + Brain.jumpLand { s.jumpAt = nil }
         birdAttention(env)
 
-        if s.flight != nil { flyTick(env); return }   // in the air: nothing else until it lands
+        if s.flight != nil { flyTick(env, dt); return }   // in the air: nothing else until it lands
         guard perchTick(dt, env) else { return }
 
         if s.time >= s.nextInterruptCheck {
@@ -623,7 +718,14 @@ extension Brain {
         if a.act == .carry, let ph = a.phase, ph.hasPrefix("around"), s.carrying != nil {   // off to another perch with it
             let left = Int(ph.dropFirst("around:".count)) ?? 1
             s.activity.phase = left > 1 ? "around:\(left - 1)" : "final"   // on the final flight it lets go partway across
-            if let spot = choosePerch(env).flatMap({ $0.perch == "floor" && left > 1 ? nil : $0 }) ?? choosePerch(env) { flyTo(spot, env) }
+            // roams the whole desktop with it: of a few perches (window tops count double) the furthest away
+            var best: Spot? = nil, far = -1.0
+            for _ in 0..<4 {
+                guard let c = choosePerch(env), !(c.perch == "floor" && left > 1) else { continue }
+                let d = abs(c.x - s.x) * (windowID(c.perch) != nil ? 2 : 1)
+                if d > far { far = d; best = c }
+            }
+            if let spot = best ?? choosePerch(env) { flyTo(spot, env) }
             return
         }
         if a.act == .carry, a.phase == "thrown" {   // dropped: once it has landed, an owl swoops after its mouse; a parrot may fetch its ball
@@ -701,7 +803,11 @@ extension Brain {
             case .recover: p.flight = .recover
             case .fly:
                 if t < 0 { p.flight = .takeoff }
-                else if t > 1 - 0.3 / f.len { p.flight = .flare }   // the last moment: wings back, feet forward
+                else if f.to == "zoom" {   // steering about: flaps climbing, glides swooping down (an owl glides most of the way)
+                    let vy = s.zoomVY ?? 0
+                    p.flight = isOwl ? (vy < -60 ? .flap : .glide) : (vy > 150 ? .glide : .flap)
+                }
+                else if t > 1 - 0.3 / f.len { p.flight = .flare }   // the last moment before landing: wings back, feet forward (not at a waypoint in mid-air)
                 else {
                     let (_, ya) = bezier(f, max(0, t - 0.03)), (_, yb) = bezier(f, min(1, t + 0.03))
                     let sink = (yb - ya) / 0.06 / f.len
@@ -721,6 +827,7 @@ extension Brain {
         if a.act == .hunt, let at = s.huntAt { p.since = s.time - at; p.toy = a.target == "mouse" }
         if a.act == .carry, let t = s.toss { p.since = s.time - t.at }   // the fling, or watching it bounce
         if a.act == .hunt, let prey = s.prey { p.caught = prey.caught }
+        p.preening = a.act == .groom && a.phase != "look"
         if p.anim == .sleep || p.inKennel { p.twitch = s.time < s.twitchUntil }
         return p
     }

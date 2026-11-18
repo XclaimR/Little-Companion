@@ -173,7 +173,11 @@ public struct Brain: Sendable {
     public mutating func debugStart(_ act: Act, target: String?, env: Environment) {
         calm = env.reduceMotion
         s.attention = nil
-        if isBird { finish(); birdStart(act, target: target, env); return }
+        if isBird {
+            finish(); birdStart(act, target: target, env)
+            if act == .zoomies { s.activity.phase = "laps:24" }   // testing: a long joy flight to watch
+            return
+        }
         finish(); start(act, target: target, env)
         if act == .kennel, s.objects.contains(where: { $0.id == target }) { s.activity.running = true }
         if act == .sleep { s.needs.tiredness = max(s.needs.tiredness, 0.6); s.nextDream = s.time + 4 }   // dream soon, for testing

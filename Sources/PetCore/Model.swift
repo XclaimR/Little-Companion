@@ -186,6 +186,8 @@ public struct DogState: Codable, Sendable, Equatable {
     public var rollTo: Double?          // an owl's pinecone is rolling to here
     public var toss: Toss?              // a toy flung (an owl's mouse) or dropped (a parrot's ball) from a perch: it's falling
     public var prey: Prey?              // the beetle or moth a hungry owl is after
+    public var boutUntil: Double?       // preening comes in bouts, with pauses to look round between them
+    public var zoomVX: Double?, zoomVY: Double?   // on a joy flight: its velocity (it steers, turning at a limited rate)
 }
 
 /// What the outside world tells the brain each tick.
@@ -253,6 +255,7 @@ public struct Pose: Sendable, Equatable {
     public var since: Double? = nil         // an owl's hunt: seconds since it settled to stare
     public var toy = false                  // ...at its toy mouse (else at prey)
     public var caught = false               // it has its prey under its wings
+    public var preening = false             // mid-bout (between bouts it stops and looks round)
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.

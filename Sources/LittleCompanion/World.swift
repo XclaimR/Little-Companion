@@ -130,7 +130,9 @@ import QuartzCore
         }
         render()
         tick()
-        if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
+        if ProcessInfo.processInfo.environment["LC_DEMO"] == "zoomies" && DogSprite.isBird {   // LC_DEMO=zoomies: just a long joy flight
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(.zoomies) } }
+        } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
             Timer.scheduledTimer(withTimeInterval: 24, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testHunt() } }
             for (at, act, target) in [(38.0, Act.carry, "mouse"), (90, .hoot, nil), (100, .play, "pinecone"), (118, .idle, "lantern"), (132, .sleep, "house")] as [(TimeInterval, Act, String?)] {

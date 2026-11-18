@@ -227,3 +227,58 @@ private func carryAbout(_ b: inout Brain, _ toy: String, _ e: Environment) -> (l
     repairOwlHome(&old, maxX: 1400)
     #expect(!old.contains { $0.kind == .feather } && !owlHome(maxX: 1400).contains { $0.kind == .feather })
 }
+
+@Test func birdsGoOnJoyFlightsAcrossTheDesktopWithoutLandingAtTheTurns() {
+    var b = Brain(seed: 2, species: .bird)
+    b.s.objects = birdHome(maxX: 1400); b.s.x = 600; b.s.perch = "floor"
+    let e = env([])
+    b.debugStart(.zoomies, target: nil, env: e)   // a long one, as in the demo
+    var xs: [Double] = [], ys: [Double] = [], flares = 0, wasFlare = false, perchedMidway = false, sharpTurns = 0, lastDir: (Double, Double)? = nil, last: (Double, Double)? = nil
+    for _ in 0..<6000 {
+        b.update(dt: 0.05, env: e)
+        if b.s.activity.act != .zoomies || b.s.flight?.to != "zoom" && b.s.activity.phase == "laps:0" { break }
+        let flare = b.pose.flight == .flare
+        if flare && !wasFlare { flares += 1 }
+        wasFlare = flare
+        if b.s.flight != nil {
+            let y = b.s.y ?? e.floorY
+            xs.append(b.s.x); ys.append(y)
+            if let l = last, let d0 = lastDir {
+                let d = (b.s.x - l.0, y - l.1), n = hypot(d.0, d.1)
+                if n > 1, (d.0 * d0.0 + d.1 * d0.1) / (n * hypot(d0.0, d0.1)) < -0.5 { sharpTurns += 1 }   // doubling back within a tick
+            }
+            if let l = last { let d = (b.s.x - l.0, y - l.1); if hypot(d.0, d.1) > 1 { lastDir = d } }
+            last = (b.s.x, y)
+        } else if b.s.activity.phase?.hasPrefix("laps") == true { perchedMidway = true }
+    }
+    #expect(!perchedMidway && flares == 0)                        // never lands, and no landing flare at the turns
+    #expect(sharpTurns == 0)                                      // swoops round, never snaps back
+    #expect((xs.max()! - xs.min()!) > 800 && (ys.max()! - ys.min()!) > 300)   // all over the desktop
+}
+
+@Test func joyFlightsOnlyWhenTheDesktopIsFairlyClear() {
+    var b = Brain(seed: 2, species: .bird)
+    b.s.objects = birdHome(maxX: 1400); b.s.x = 600; b.s.perch = "floor"
+    b.s.needs = Needs(hunger: 0, thirst: 0, tiredness: 0, boredom: 1); b.s.personality.energy = 1
+    let clear = env([editor]), busy = env([Win(id: 1, box: Box(x: 40, y: 60, w: 900, h: 700)), Win(id: 2, box: Box(x: 500, y: 100, w: 800, h: 650)), Win(id: 3, box: Box(x: 100, y: 300, w: 600, h: 400))])
+    #expect(b.birdCandidates(clear).contains { $0.act == .zoomies })
+    #expect(!b.birdCandidates(busy).contains { $0.act == .zoomies })   // three big windows over most of the screen: not now
+}
+
+@Test func preeningComesInBoutsAndOnlyCuriousBirdsStopToLookRound() {
+    func looks(curiosity: Double) -> Int {
+        var b = Brain(seed: 6, species: .bird)
+        b.s.objects = birdHome(maxX: 1400); b.s.x = 600; b.s.perch = "floor"
+        b.s.personality.curiosity = curiosity
+        b.debugStart(.groom, target: nil, env: env([]))
+        var n = 0, last: String? = nil
+        for _ in 0..<1200 {
+            b.s.activity.remaining = 100   // keep it preening for the test
+            b.update(dt: 0.1, env: env([]))
+            if b.s.activity.phase == "look" && last != "look" { n += 1 }
+            last = b.s.activity.phase
+        }
+        return n
+    }
+    #expect(looks(curiosity: 0.05) < looks(curiosity: 0.95))
+}

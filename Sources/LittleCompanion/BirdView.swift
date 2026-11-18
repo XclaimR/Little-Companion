@@ -61,7 +61,10 @@ extension World {
         case .drink?: return Int(t * 4) % 2 == 0 ? .eatA : .eatB
         case .peck?: return t.truncatingRemainder(dividingBy: 2) < 1 && Int(t * 6) % 2 == 0 ? .peckA : .peckB
         case .splash?: return Int(t * 5) % 2 == 0 ? .splashA : .splashB
-        case .groom?: return t.truncatingRemainder(dividingBy: 3) < 2 ? (Int(t * 2.5) % 2 == 0 ? .preenA : .preenB) : .idle
+        case .groom?:   // in a bout: nibbling in an uneven rhythm; between bouts it looks round
+            let k = Int(t * 3)
+            if p.preening { return ((k &* 2654435761) >> 13) & 1 == 0 ? .preenA : .preenB }
+            return [DogSprite.Bird.idle, .lookBack, .idle, .lookUp][((k / 4) &* 40503 >> 7) & 3]
         case .stretch?: return .stretch
         case .swing?: return .swing
         case .bell?: return Int(t * 3) % 2 == 0 ? .bellA : .bellB
@@ -178,7 +181,10 @@ extension World {
         case .sleep?: return p.twitch && Int(t * 3) % 2 == 0 ? .dream : .dayDoze   // asleep on one leg
         case .drink?: return Int(t * 2) % 2 == 0 ? .eatA : .eatB
         case .splash?: return Int(t * 3) % 2 == 0 ? .fluffed : .preen
-        case .groom?: return t.truncatingRemainder(dividingBy: 4) < 2.5 ? .preen : .idle
+        case .groom?:   // bouts of preening, then a look round
+            let k = Int(t * 2)
+            if p.preening { return ((k &* 2654435761) >> 13) & 1 == 0 ? .preen : .idle }
+            return [DogSprite.Owl.idle, .swivelBack, .idle, .tiltL][((k / 3) &* 40503 >> 7) & 3]
         case .stretch?: return .stretch
         case .play?: return .idle   // side-on, watching the pinecone (no front-facing frames mid-game: they read as a flip)
         case .hoot?: let k = t.truncatingRemainder(dividingBy: 2.4); return k < 0.5 ? .hootA : k < 1.2 ? .hootB : k < 1.5 ? .hootA : .idle

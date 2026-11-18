@@ -23,6 +23,7 @@ public struct SimReport: Sendable {
     public var jumps = 0, runs = 0, glances = 0, turns = 0, follows = 0
     public var busyRetreats = 0, frontSits = 0
     public var flights = 0, falls = 0, windowVisits = 0, rides = 0   // a bird's
+    public var perchFlights = 0   // flights just to go and sit somewhere else (not to food, water, toys or home)
     public var failures: [String] = []
 
     public func share(_ a: Act) -> Double { (actTime[a] ?? 0) / (hours * 3600) }
@@ -190,7 +191,7 @@ public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2, spe
             r.timeline.append(String(format: "%02d:%02d %@ %@", h, mm, s.activity.act.rawValue, s.perch ?? "air"))
         }
         let flying = s.flight != nil
-        if flying && !wasFlying { r.flights += 1; if s.flight?.kind == .fall { r.falls += 1 } }
+        if flying && !wasFlying { r.flights += 1; if s.activity.act == .fly { r.perchFlights += 1 }; if s.flight?.kind == .fall { r.falls += 1 } }
         wasFlying = flying
         if s.perch != lastPerch, let p = s.perch, p.hasPrefix("w:") { r.windowVisits += 1 }
         lastPerch = s.perch
@@ -230,7 +231,7 @@ public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2, spe
         let awake = Set(r.actTime.filter { $0.key != .sleep && $0.value > 60 }.keys)
         if awake.count < 8 { r.failures.append("only \(awake.count) different activities in a day") }
         let awakeHours = hours * (1 - r.share(.sleep) - r.share(.kennel))
-        if r.flights < 10 || Double(r.flights) / awakeHours > 15 { r.failures.append(String(format: "%d flights in %.1f awake hours (expected a few an hour)", r.flights, awakeHours)) }
+        if r.flights < 10 || Double(r.perchFlights) / awakeHours > 8 || Double(r.flights) / awakeHours > 20 { r.failures.append(String(format: "%d flights (%d perch to perch) in %.1f awake hours (expected a few an hour)", r.flights, r.perchFlights, awakeHours)) }
         if r.windowVisits == 0 && species == .bird { r.failures.append("never perched on a window") }   // owls may keep to their oak and lantern all night; window perching is the same code
         if species == .owl {   // the other way round from the birds: asleep by day, up at night
             if dayAsleep / dayTotal < 0.6 { r.failures.append(String(format: "an owl awake %.0f%% of the day (10–17)", 100 - dayAsleep / dayTotal * 100)) }
