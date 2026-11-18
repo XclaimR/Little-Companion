@@ -12,7 +12,7 @@ import QuartzCore
     var kennelFront: CALayer?
     var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse window and door
     var glowLayer: CALayer?, houseEnteredAt: CFTimeInterval?             // the birdhouse window's evening lamp
-    var glintLayer: CALayer?, lanternLayer: CALayer?                     // an owl's: its eyes glinting in the knothole, its lantern
+    var glintLayer: CALayer?, lanternLayer: CALayer?, preyLayer: CALayer?   // an owl's: its eyes glinting in the knothole, its lantern, its prey
     var windows: [Win] = [], windowsAt: CFTimeInterval = 0              // other apps' windows, polled for a bird
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
     var bedRims: [String: CALayer] = [:]
@@ -36,6 +36,8 @@ import QuartzCore
     /// LC_LOG=1 prints every activity change, jump and cursor reaction (for watching behaviour in tests).
     let log = ProcessInfo.processInfo.environment["LC_LOG"] != nil
     var logged = (started: -1.0, jump: false, attention: "", pose: "")
+    var posLoggedAt: CFTimeInterval = 0
+    let started = CACurrentMediaTime()
     /// LC_SPEED=10 runs the dog's life 10× faster, for testing behaviour (walking looks fast too).
     let speed = max(0.1, Double(ProcessInfo.processInfo.environment["LC_SPEED"] ?? "") ?? 1)
     /// LC_HOUR=23 pins the clock to that hour (testing: an owl's night, the lantern, a dog's bedtime).
@@ -136,7 +138,7 @@ import QuartzCore
             }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isBird {   // a bird's tour: onto a window (drag or close it), then its tree
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
-            for (at, act, target) in [(24.0, Act.swing, nil), (40, .bell, nil), (50, .splash, "birdbath"), (60, .eat, "seeds"), (75, .sleep, "house")] as [(TimeInterval, Act, String?)] {
+            for (at, act, target) in [(24.0, Act.swing, nil), (40, .bell, nil), (50, .splash, "birdbath"), (60, .eat, "seeds"), (72, .carry, "rattan"), (100, .sleep, "house")] as [(TimeInterval, Act, String?)] {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil {   // scripted tour for testing
@@ -193,8 +195,8 @@ import QuartzCore
         dogLayer.setAffineTransform(.identity)
         dogLayer.bounds = CGRect(origin: .zero, size: DogSprite.size)
         if wasBird != DogSprite.isBird || wasOwl != DogSprite.isOwl {   // another species: rebuild the home's layers
-            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer, glowLayer, glintLayer, lanternLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
-            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil; glowLayer = nil; glintLayer = nil; lanternLayer = nil
+            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer, glowLayer, glintLayer, lanternLayer, preyLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
+            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil; glowLayer = nil; glintLayer = nil; lanternLayer = nil; preyLayer = nil
         }
         render()
     }
@@ -333,6 +335,11 @@ import QuartzCore
         let env = environment()
         brain.advance(by: gap * speed, env: env)
         if log { logChanges() }
+        if log && DogSprite.isBird && now >= posLoggedAt + 0.5 {   // LC_LOG: where a bird is, twice a second (for checking recordings)
+            posLoggedAt = now
+            let p = brain.pose
+            print(String(format: "pos %.2f %.0f %.0f", now - started, p.x, p.y ?? Double(floorY))); fflush(stdout)
+        }
         if let until = hiddenUntil, Date() >= until { showNow() }
         let p = brain.pose
         let moving = p.anim == .walk || p.anim == .run || p.anim == .zoom
@@ -513,11 +520,12 @@ import QuartzCore
             let held = o.id == p.carrying
             let baked = held && p.holding != nil   // drawn into the dog's frame instead
             if l.isHidden != baked { l.isHidden = baked }
-            let talons = dog.maxY - DogSprite.footRows * DogSprite.pointsPerPixel + size.height * 0.6   // a bird carries it in its talons
-            var bottom = held ? (DogSprite.isBird ? talons : dog.minY + mouthRow * DogSprite.pointsPerPixel) : floorY // carried toys ride in its mouth
+            let beak = dog.minY + (DogSprite.isOwl ? 17 : 15) * DogSprite.pointsPerPixel + size.height * 0.5   // a bird carries its toy in its beak
+            var bottom = held ? (DogSprite.isBird ? beak : dog.minY + mouthRow * DogSprite.pointsPerPixel) : floorY // carried toys ride in its mouth
             if let t = brain.s.toss, t.id == o.id { bottom = CGFloat(t.y(brain.s.time - t.at, floorY: Double(floorY))) + size.height * 0.5 }   // flung: falling
             let sink: CGFloat = o.kind == .kennel ? DogSprite.footRows * DogSprite.pointsPerPixel : 0   // kennel walls reach the dog's lowest outline row
-            let pos = CGPoint(x: (CGFloat(o.x) - size.width / 2).rounded(), y: (screenH - bottom - sink).rounded())
+            let ahead: CGFloat = held && DogSprite.isBird ? CGFloat(p.facing) * (DogSprite.isOwl ? 5 : 9) * DogSprite.pointsPerPixel : 0   // at the tip of its beak
+            let pos = CGPoint(x: (CGFloat(o.x) + ahead - size.width / 2).rounded(), y: (screenH - bottom - sink).rounded())
             if l.position != pos { l.position = pos }
             let z: CGFloat = held ? 2 : (o.kind == .rug || o.kind == .bed || o.kind == .kennel ? -1 : 0)
             if l.zPosition != z { l.zPosition = z }

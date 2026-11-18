@@ -32,7 +32,8 @@ extension World {
     }
 
     func birdInterval(_ p: Pose, else base: TimeInterval) -> TimeInterval {
-        if p.flight != nil || p.jump != nil { return 1.0 / 30 }   // smooth flight
+        if p.flight != nil || p.jump != nil || brain.s.toss != nil { return 1.0 / 30 }   // smooth flight, a falling toy
+        if brain.s.prey != nil { return 1.0 / 20 }                                      // a beetle or moth on the move
         if p.wobble || [.swing, .bell, .splash].contains(p.act) || brain.s.perch?.hasPrefix("w:") == true { return 1.0 / 15 }   // riding a window that may move
         if p.anim == .walk || [.eat, .drink, .peck, .groom].contains(p.act) { return 1.0 / 10 }
         if p.inKennel { return 1.0 }
@@ -66,6 +67,7 @@ extension World {
         case .bell?: return Int(t * 3) % 2 == 0 ? .bellA : .bellB
         case .react?: return .startled
         case .greet?: return .front
+        case .carry? where p.since != nil: return .tilt   // dropped its ball: head on one side, watching it bounce
         default: break
         }
         if p.front { return .front }
@@ -107,7 +109,7 @@ extension World {
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
         let key = "\(frameIndex)\(p.facing)"
         if key != spriteKey { spriteKey = key; dogLayer.contents = DogSprite.image(frameIndex, facing: CGFloat(p.facing)) }
-        if DogSprite.isOwl { renderKnothole(p, t: t) } else {
+        if DogSprite.isOwl { renderKnothole(p, t: t); renderPrey(t: t) } else {
             renderBirdhouseShadow(p)
             renderSwingAndBell(swing: swingA, bell: ringing && !calm ? CGFloat(sin(t * 16) * 0.35) : 0)
         }
@@ -131,6 +133,23 @@ extension World {
         updateHitTest()
     }
 
+    /// The beetle or moth a hungry owl is after: two frames (legs, wings), facing the way it's going.
+    func renderPrey(t: Double) {
+        let l = preyLayer ?? {
+            let l = CALayer(); l.magnificationFilter = .nearest; l.zPosition = 0.6; l.anchorPoint = CGPoint(x: 0.5, y: 0)
+            panel.contentView!.layer!.addSublayer(l); preyLayer = l
+            return l
+        }()
+        guard let prey = brain.s.prey, !prey.caught else { if !l.isHidden { l.isHidden = true }; return }
+        if l.isHidden { l.isHidden = false }
+        let art = prey.kind == .moth ? (Int(t * 10) % 2 == 0 ? "mothA" : "mothB") : (Int(t * 8) % 2 == 0 ? "beetleA" : "beetleB")
+        let (img, size) = ObjectSprite.image(id: art, kind: art)
+        if l.bounds.size != size { l.bounds = CGRect(origin: .zero, size: size) }
+        if l.contents as! CGImage? !== img { l.contents = img }
+        l.position = CGPoint(x: CGFloat(prey.x).rounded(), y: (screenH - floorY + CGFloat(prey.h)).rounded())
+        l.setAffineTransform(CGAffineTransform(scaleX: prey.vx < 0 ? -1 : 1, y: 1))   // the art faces right
+    }
+
     /// An owl's frame. Most of the night it sits and watches, its head (not its body) following things.
     func owlFrame(_ p: Pose, _ t: Double) -> DogSprite.Owl {
         if let f = p.flight {
@@ -145,6 +164,7 @@ extension World {
         }
         if p.inKennel { return p.anim == .sleep ? .sleep : .fluffed }
         if p.act == .hunt, let s = p.since {   // stare, pounce, cloak its wings over it; the toy is let go, a catch is gulped
+            if !p.toy && !p.caught { return p.anim == .walk ? (Int(p.x / 6) % 2 == 0 ? .walkA : .walkB) : .alert }   // watching it, stalking after it
             if s < 3 { return .alert }
             if s < 3.4 { return .pounce }
             if p.toy { return s < 6 ? .mantle : .front }

@@ -127,17 +127,24 @@ private func at(_ hour: Double) -> Environment { var e = env([]); e.hour = hour;
     #expect(Double(awake) > 0.4 * 7 * 3600, "awake \(awake / 60) min of 7 h of night")   // as simrun: owls rest a while around 2–3 am
 }
 
-@Test func anOwlEatsByHuntingARustleAndPlaysWithItsToyMouse() {
+@Test func anOwlEatsByHuntingPreyAndPlaysWithItsToyMouse() {
     let e = at(23)
-    var b = owl()   // a rustle in the floor: stare, pounce, mantle over it, gulp; nothing is drawn under its wings
+    var b = owl()   // a beetle or a moth on the floor: it watches, stalks after it, pounces, mantles over it and gulps it down
     b.s.needs.hunger = 0.9
     b.debugStart(.hunt, target: nil, env: e)
-    var phases: [String] = []
-    for _ in 0..<300 {
+    #expect(b.s.prey != nil)
+    var phases: [String] = [], preyMoved = false, firstX = b.s.prey!.x
+    for _ in 0..<600 {
         b.update(dt: 0.1, env: e)
-        if let s = b.pose.since, !b.pose.toy { let ph = s < 3 ? "stare" : s < 5 ? "mantle" : "gulp"; if phases.last != ph { phases.append(ph) } }
+        if let p = b.s.prey, !p.caught, abs(p.x - firstX) > 5 { preyMoved = true }
+        if let s = b.pose.since, !b.pose.toy {
+            let ph = !b.pose.caught ? (b.pose.anim == .walk ? "stalk" : "watch") : s < 5 ? "mantle" : "gulp"
+            if phases.last != ph { phases.append(ph) }
+        }
+        if b.s.activity.act != .hunt { break }
     }
-    #expect(phases == ["stare", "mantle", "gulp"] && b.s.needs.hunger < 0.2)
+    #expect(preyMoved && b.s.prey == nil && b.s.needs.hunger < 0.2)
+    #expect(phases.first == "watch" && phases.contains("stalk") && Array(phases.suffix(2)) == ["mantle", "gulp"], "\(phases)")
     var t = owl()   // the plush mouse is a toy: fun, not food
     t.s.needs.hunger = 0.5; t.s.needs.boredom = 0.8
     t.debugStart(.hunt, target: "mouse", env: e)
@@ -184,25 +191,35 @@ func anOwlsDayHoldsInvariants(seed: UInt64) {
     #expect(r.failures.isEmpty, "\(r.failures.prefix(5))")
 }
 
-@Test func anOwlCarriesItsMouseUpABranchFlingsItAndPouncesOnIt() {
-    var b = owl()
-    let e = at(23)
-    let start = b.s.objects.first { $0.id == "mouse" }!.x
-    b.debugStart(.carry, target: "mouse", env: e)
-    var heldOnBranch = false, trackedInFlight = true, fell = false, landedAt: Double? = nil, chased = false
-    for _ in 0..<1500 {
-        b.update(dt: 0.1, env: e)
-        let m = b.s.objects.first { $0.id == "mouse" }!.x
-        if b.s.carrying == "mouse" {
-            if b.branch(b.s.perch) != nil { heldOnBranch = true }
-            if b.s.flight != nil && abs(m - b.s.x) > 0.01 { trackedInFlight = false }
+/// Carries `toy` about in its beak and drops it in mid-flight: returns (landings with it, dropped in the air, where it lies, followed by).
+private func carryAbout(_ b: inout Brain, _ toy: String, _ e: Environment) -> (landings: Int, midAir: Bool, bounced: Bool, lies: Double?, next: Act?) {
+    b.debugStart(.carry, target: toy, env: e)
+    var landings = 0, midAir = false, bounced = false, wasFlying = false, lastY: Double? = nil, fell = false, tossed = false
+    for _ in 0..<4000 {
+        b.update(dt: 0.05, env: e)
+        let flying = b.s.flight != nil
+        if wasFlying && !flying && b.s.carrying == toy { landings += 1 }
+        wasFlying = flying
+        if let t = b.s.toss {
+            tossed = true
+            if flying && b.s.carrying == nil { midAir = true }
+            let y = t.y(b.s.time - t.at, floorY: e.floorY)
+            if let ly = lastY { if y > ly + 0.5 { fell = true } else if fell && y < ly - 0.5 { bounced = true } }
+            lastY = y
         }
-        if b.s.toss != nil { fell = true }
-        if fell && b.s.toss == nil && landedAt == nil { landedAt = m }
-        if landedAt != nil && b.s.activity.act == .hunt && b.s.activity.target == "mouse" { chased = true; break }
+        if tossed && b.s.toss == nil && b.s.activity.act != .carry { return (landings, midAir, bounced, b.s.objects.first { $0.id == toy }?.x, b.s.activity.act) }
     }
-    #expect(heldOnBranch && trackedInFlight && fell && chased)
-    #expect(landedAt != nil && landedAt != start && b.s.objects.first { $0.id == "mouse" }!.x == landedAt)   // it fell somewhere new and lies there
+    return (landings, midAir, bounced, nil, nil)
+}
+
+@Test func birdsFlyAboutWithAToyInTheirBeakAndDropItInMidFlight() {
+    var o = owl()
+    let r = carryAbout(&o, "mouse", at(23))
+    #expect(r.landings >= 1 && r.midAir && !r.bounced && r.lies != nil && r.next == .hunt)   // the owl swoops after its mouse
+    var p = Brain(seed: 4, species: .bird)
+    p.s.objects = birdHome(maxX: 1400); p.s.x = 600; p.s.perch = "floor"
+    let q = carryAbout(&p, "rattan", env([]))
+    #expect(q.landings >= 1 && q.midAir && q.bounced && q.lies != nil)                       // the ball bounces
 }
 
 @Test func theFeatherIsGoneFromOwlHomes() {

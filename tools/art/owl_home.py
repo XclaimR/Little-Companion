@@ -64,11 +64,32 @@ def log_perch():
     put(g, 14, 0, 'G'); put(g, 15, 0, 'g'); put(g, 20, 0, 'G')
     return outline(g)
 
+def beetle(step):
+    """Prey: a little beetle scuttling along the floor (two leg frames)."""
+    g = blank(9, 5)
+    ell(g, 4.5, 2, 3.6, 1.8, 'q')
+    for x in range(2, 7): g[1][x] = 'Q' if x in (3, 4) else g[1][x]
+    put(g, 8, 2, 'e'); put(g, 8, 1, 'e')                           # head
+    for x in ((1, 4, 7) if step else (2, 5, 6)): put(g, x, 4, 'e')   # legs
+    return outline(g)
+
+def moth(up):
+    """Prey: a dusty moth fluttering low (wings up, wings down)."""
+    g = blank(9, 7)
+    for x in range(3, 7): g[3][x] = 'K'                            # body
+    put(g, 7, 3, 'K')
+    if up:
+        ell(g, 4, 1.6, 2.6, 1.7, 'j'); ell(g, 3.6, 1.4, 1.2, .8, 'J')
+    else:
+        ell(g, 4, 5.2, 2.6, 1.7, 'j'); ell(g, 3.6, 5.4, 1.2, .8, 'J')
+    return outline(g)
+
 def grids():
     """For the objects atlas (kennel.py): the oak, the toys and the lantern lit and unlit."""
     return {'oak': hollow_oak(), 'mouse': mouse(), 'pinecone': pinecone(), 'log': log_perch(),
+            'beetleA': beetle(0), 'beetleB': beetle(1), 'mothA': moth(True), 'mothB': moth(False),
             'lantern': lantern(lit=False), 'lanternLit': lantern()}
-KEYS = {name: {k: 'owlhome-' + k for k in C} for name in ('oak', 'mouse', 'pinecone', 'log', 'lantern', 'lanternLit')}
+KEYS = {name: {k: 'owlhome-' + k for k in C} for name in ('oak', 'mouse', 'pinecone', 'log', 'lantern', 'lanternLit', 'beetleA', 'beetleB', 'mothA', 'mothB')}
 
 if __name__ == '__main__':
     out = (sys.argv[1] if len(sys.argv) > 1 else B.HERE) + '/build'
@@ -90,7 +111,7 @@ if __name__ == '__main__':
                               ('moth', 'tiltL', left + 50, 0), ('hedwig', 'slowBlink', left + 82, 0)):
         O.use(name); blit(dict(O.FRAMES)[frame](), x - 16, floor - h + 1, B.rgb)
     x = 120
-    for t in (mouse(), pinecone(), lantern(), log_perch()):
+    for t in (mouse(), pinecone(), lantern(), log_perch(), beetle(0), moth(True)):
         blit(t, x, floor, hx); x += len(t[0]) + 4
     B.write_png(out + '/owl_home_preview.png', img, Wd * S, Ht * S, alpha=False)
     print('ok')

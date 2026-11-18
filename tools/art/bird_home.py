@@ -127,6 +127,16 @@ def dish(fill):
     for x in range(2, 14, 3): g[1][x] = fill[2]
     return outline(g)
 
+def rattan():
+    """A parrot's toy: a woven rattan ball it picks up in its beak and drops to watch it bounce."""
+    g = blank(9, 9)
+    ell(g, 4.5, 4.5, 4.2, 4.2, 'r')
+    for y in range(9):
+        for x in range(9):
+            if g[y][x] == 'r' and ((x + y) % 3 == 0 or (x - y) % 3 == 0): g[y][x] = 'R'   # the weave
+    put(g, 3, 2, 'L'); put(g, 2, 3, 'L')
+    return outline(g)
+
 KEYS = {
     'tree': dict(o='kennel-outline', b='tree-bark', B='tree-barkLight', k='tree-barkDark', L='plant-leaf', l='plant-leafLight', D='tree-leafDark',
                  w='kennel-wood', W='kennel-woodDark', h='kennel-woodLight', r='kennel-roof', R='kennel-roofDark', T='kennel-roofLight', i='kennel-plate',
@@ -135,10 +145,11 @@ KEYS = {
     'swing': dict(o='kennel-outline', c='rope-C', w='kennel-woodLight', W='kennel-woodDark'),
     'bell': dict(o='tree-bellOutline', c='rope-C', y='biscuit-tag', Y='pepper-collardark', l='tree-bellShine'),
     'seedDish': dict(o='foodBowl-o', s='tree-seed', S='tree-seedDark', h='tree-seedHusk', p='foodBowl-B', P='foodBowl-R'),
+    'rattan': dict(o='rattan-o', r='rattan-r', R='rattan-R', L='rattan-L'),
     'waterDish': dict(o='waterBowl-o', s='waterBowl-W', S='waterBowl-W', h='waterBowl-w', p='waterBowl-B', P='waterBowl-w'),
 }
 def grids():
-    return {'tree': tree(), 'houseGlow': window_glow(), 'swing': swing(), 'bell': bell(), 'seedDish': dish('sSh'), 'waterDish': dish('sSh')}
+    return {'tree': tree(), 'houseGlow': window_glow(), 'swing': swing(), 'bell': bell(), 'seedDish': dish('sSh'), 'waterDish': dish('sSh'), 'rattan': rattan()}
 
 if __name__ == '__main__':
     import bird_sheet

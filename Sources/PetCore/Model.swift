@@ -32,6 +32,7 @@ public enum Kind: String, Codable, CaseIterable, Sendable, CodingKeyRepresentabl
     case floor // not placeable: "sleeping on the bare floor" as a sleep spot with its own preference
     case tree, seedDish, waterDish   // a bird's home: its tree (branches, birdhouse, swing, bell) and its dishes
     case oak, mouse, pinecone, feather, log   // an owl's: its hollow oak, its toy mouse, a pinecone to bat, a log perch (feather: retired, kept so older saves load)
+    case rattan                               // a parrot's woven ball: carried in its beak and dropped to watch it bounce
     /// A dog's kinds, in the order its innate tastes are rolled (bird kinds come after, so a dog's seed rolls the same dog).
     public static let dogKinds: [Kind] = [.bed, .rug, .foodBowl, .waterBowl, .ball, .plush, .rope, .kennel, .floor]
     /// A bird's kinds in the order they're rolled (later kinds come after, so a bird's seed rolls the same bird).
@@ -183,7 +184,8 @@ public struct DogState: Codable, Sendable, Equatable {
     public var lastNearYou: Double?     // last moved to a window near your recent activity
     public var huntAt: Double?          // an owl: when it settled to stare (the hunt runs on from there)
     public var rollTo: Double?          // an owl's pinecone is rolling to here
-    public var toss: Toss?              // an owl has just flung its toy mouse off a branch: it's falling
+    public var toss: Toss?              // a toy flung (an owl's mouse) or dropped (a parrot's ball) from a perch: it's falling
+    public var prey: Prey?              // the beetle or moth a hungry owl is after
 }
 
 /// What the outside world tells the brain each tick.
@@ -249,7 +251,8 @@ public struct Pose: Sendable, Equatable {
     public var crest = false                // crest up: excited or startled
     public var wobble = false               // balancing
     public var since: Double? = nil         // an owl's hunt: seconds since it settled to stare
-    public var toy = false                  // ...at its toy mouse (else a rustle in the floor)
+    public var toy = false                  // ...at its toy mouse (else at prey)
+    public var caught = false               // it has its prey under its wings
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.
