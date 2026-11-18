@@ -42,6 +42,9 @@ enum DogSprite {
     enum Bird: Int { case idle, idleCrest, front, lookBack, bobA, bobB, lookUp, tilt, blink, hopA, hopB, peckA, peckB,
                           takeoff, flapUp, flapMid, flapDown, glide, flare, wobble, preenA, preenB, stretch, eatA, eatB, splashA, splashB,
                           swing, bellA, bellB, nap, sleep, dream, startled, fallA, fallB, recover, frontBlink, recoverB }
+    /// An owl's frames, in the order tools/art/owl_sheet.py draws them (32×32, facing right).
+    enum Owl: Int { case idle, front, blink, slowBlink, swivelBack, tiltL, tiltR, alert, fluffed, hootA, hootB, walkA, walkB, pounce, mantle,
+                         takeoff, flapUp, flapMid, flapDown, glide, flare, preen, stretch, eatA, eatB, dayDoze, sleep, dream, startled, fallA, fallB, recover }
     static var pixels: CGSize { isBird ? CGSize(width: 32, height: 32) : CGSize(width: 48, height: 36) }
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }
@@ -53,8 +56,11 @@ enum DogSprite {
                        ("bean", "Bean", "dachshund"), ("pepper", "Pepper", "border collie")]
     /// The birds: same layout as `dogs`; their sheets are bird frames (see `Bird`).
     static let birds = [("mango", "Mango", "cockatiel"), ("pearl", "Pearl", "lutino cockatiel"), ("kiwi", "Kiwi", "budgie"), ("sunny", "Sunny", "sun conure")]
-    static var isBird: Bool { birds.contains { $0.0 == dog } }
-    static var name: String { (dogs + birds).first { $0.0 == dog }?.1 ?? "Little Companion" }
+    /// The owls: birds of the night, on the bird engine with their own frames and home.
+    static let owls = [("moth", "Moth", "barn owl"), ("pip", "Pip", "little owl"), ("hedwig", "Hedwig", "snowy owl"), ("bramble", "Bramble", "long-eared owl")]
+    static var isOwl: Bool { owls.contains { $0.0 == dog } }
+    static var isBird: Bool { isOwl || birds.contains { $0.0 == dog } }   // owls are drawn and moved like birds
+    static var name: String { (dogs + birds + owls).first { $0.0 == dog }?.1 ?? "Little Companion" }
     nonisolated(unsafe) static var dog = "ollie" { didSet { if dog != oldValue { cache = [:]; loaded = nil } } }
     nonisolated(unsafe) private static var loaded: CGImage?
     private static var sheet: CGImage {

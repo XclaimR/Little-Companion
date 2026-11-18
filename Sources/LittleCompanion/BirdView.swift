@@ -6,7 +6,7 @@ import QuartzCore
 /// and its shadow in the birdhouse doorway. The bird stays on the desktop layer, behind every window, like the dogs.
 extension World {
     var pp: CGFloat { DogSprite.pointsPerPixel }
-    var treeX: CGFloat { CGFloat(brain.s.objects.first { $0.kind == .tree }?.x ?? Double(maxX)) }
+    var treeX: CGFloat { CGFloat(brain.s.objects.first { $0.kind == .tree || $0.kind == .oak }?.x ?? Double(maxX)) }
 
     /// Windows are polled ~15 times a second while it's on (or flying to) a window, once a second otherwise. No permission needed.
     func birdEnvironment(cursor c: CGPoint, idle: Double, hour: Double) -> Environment {
@@ -90,9 +90,15 @@ extension World {
         let size = DogSprite.size
         let r = CGRect(x: feetX - size.width / 2, y: feetY - size.height + DogSprite.footRows * pp - lift, width: size.width, height: size.height)
         lastPose = p; lastRect = r
-        var frame = birdFrame(p, t)
-        if t < blinkUntil { frame = frame == .idle ? .blink : frame == .front ? .frontBlink : frame }
-        frameIndex = frame.rawValue
+        if DogSprite.isOwl {
+            var frame = owlFrame(p, t)
+            if t < blinkUntil { frame = frame == .idle ? .blink : frame == .front ? .slowBlink : frame }
+            frameIndex = frame.rawValue
+        } else {
+            var frame = birdFrame(p, t)
+            if t < blinkUntil { frame = frame == .idle ? .blink : frame == .front ? .frontBlink : frame }
+            frameIndex = frame.rawValue
+        }
         let origin = CGPoint(x: r.minX.rounded(), y: (screenH - r.maxY).rounded())
 
         CATransaction.begin()
@@ -101,21 +107,104 @@ extension World {
         if origin != dogOrigin { dogOrigin = origin; dogLayer.position = origin }
         let key = "\(frameIndex)\(p.facing)"
         if key != spriteKey { spriteKey = key; dogLayer.contents = DogSprite.image(frameIndex, facing: CGFloat(p.facing)) }
-        renderBirdhouseShadow(p)
-        renderSwingAndBell(swing: swingA, bell: ringing && !calm ? CGFloat(sin(t * 16) * 0.35) : 0)
+        if DogSprite.isOwl { renderKnothole(p, t: t) } else {
+            renderBirdhouseShadow(p)
+            renderSwingAndBell(swing: swingA, bell: ringing && !calm ? CGFloat(sin(t * 16) * 0.35) : 0)
+        }
 
         let rawEmote = p.emote ?? ""
         let snoozing = rawEmote == "z"
         if zzzLayer.isHidden == snoozing { zzzLayer.isHidden = !snoozing }
         if snoozing {   // from the birdhouse doorway, or just above its head on a branch
-            zzzLayer.position = p.inKennel ? CGPoint(x: treeX + CGFloat(Tree.entrance.dx), y: screenH - (floorY - CGFloat(Tree.entrance.h) - 6 * pp)) : CGPoint(x: r.midX + CGFloat(p.facing) * 6, y: screenH - (r.minY + 8 * pp))
+            let door = DogSprite.isOwl ? Oak.entrance : Tree.entrance
+            zzzLayer.position = p.inKennel ? CGPoint(x: treeX + CGFloat(door.dx), y: screenH - (floorY - CGFloat(door.h) - 6 * pp)) : CGPoint(x: r.midX + CGFloat(p.facing) * 6, y: screenH - (r.minY + 8 * pp))
         }
         let emote = snoozing || p.inKennel ? "" : rawEmote
         if emote != emoteText { emoteText = emote; emoteLayer.string = emote }
         if !emote.isEmpty { emoteLayer.position = CGPoint(x: r.midX + CGFloat(p.facing) * 8, y: screenH - r.minY + 10) }
         renderObjects(p, dog: r)
+        if DogSprite.isOwl, let m = objectLayers["mouse"] {   // pounced: the mouse is under its wings (drawn into its frame) until it's eaten
+            let caught = p.act == .hunt && (p.since ?? 0) >= 3.2
+            if m.isHidden != caught { m.isHidden = caught }
+        }
         CATransaction.commit()
         updateHitTest()
+    }
+
+    /// An owl's frame. Most of the night it sits and watches, its head (not its body) following things.
+    func owlFrame(_ p: Pose, _ t: Double) -> DogSprite.Owl {
+        if let f = p.flight {
+            switch f {
+            case .takeoff: return .takeoff
+            case .flap: return [DogSprite.Owl.flapUp, .flapMid, .flapDown, .flapMid][Int(t * 8) % 4]   // slow, deep wingbeats
+            case .glide: return .glide
+            case .flare: return .flare
+            case .fall: return Int(t * 7) % 2 == 0 ? .fallA : .fallB
+            case .recover: return Int(t * 10) % 2 == 0 ? .recover : .flapDown
+            }
+        }
+        if p.inKennel { return p.anim == .sleep ? .sleep : .fluffed }
+        if p.act == .hunt, let s = p.since {   // stare, pounce, cloak its wings over the mouse, eat
+            if s < 3 { return .alert }
+            if s < 3.4 { return .pounce }
+            if s < 6 { return .mantle }
+            return Int(t * 2) % 2 == 0 ? .eatA : .eatB
+        }
+        if p.wobble { return .flare }
+        if p.jump != nil { return p.act == .play ? .pounce : .walkB }
+        if p.anim == .walk { return Int(p.x / 6) % 2 == 0 ? .walkA : .walkB }   // a waddle
+        switch p.act {
+        case .sleep?: return p.twitch && Int(t * 3) % 2 == 0 ? .dream : .dayDoze   // asleep on one leg
+        case .drink?: return Int(t * 2) % 2 == 0 ? .eatA : .eatB
+        case .splash?: return Int(t * 3) % 2 == 0 ? .fluffed : .preen
+        case .groom?: return t.truncatingRemainder(dividingBy: 4) < 2.5 ? .preen : .idle
+        case .stretch?: return .stretch
+        case .play?: return .alert                                                     // eyeing the pinecone before the next bat
+        case .hoot?: let k = t.truncatingRemainder(dividingBy: 2.4); return k < 0.5 ? .hootA : k < 1.2 ? .hootB : k < 1.5 ? .hootA : .idle
+        case .react?: return .startled
+        case .greet?: return .front
+        default: break
+        }
+        if p.front { return t.truncatingRemainder(dividingBy: 3) < 0.7 ? .slowBlink : .front }   // a slow blink at you
+        if p.attention == .head, let lx = p.lookX { return (lx - p.x) * p.facing < 0 ? .swivelBack : (lx < p.x ? .tiltL : .tiltR) }
+        if p.act == .lookAround { return [DogSprite.Owl.idle, .swivelBack, .front, .idle][Int(t / 1.5) % 4] }
+        let k = t.truncatingRemainder(dividingBy: 11)
+        return k > 8 && k < 9.2 ? .slowBlink : k > 4 && k < 5.5 ? .swivelBack : .idle
+    }
+
+    /// The owl's knothole: while it's home, its eyes glint in the dark (now and then, while it sleeps by day, it peeks).
+    /// The lantern on the right branch is lit from dusk to dawn.
+    func renderKnothole(_ p: Pose, t: Double) {
+        let root = panel.contentView!.layer!
+        let glint = glintLayer ?? {
+            let l = CALayer(); l.zPosition = 0.5
+            let colour: CGColor = switch DogSprite.dog { case "moth": DogSprite.rgb(1, 1, 1); case "bramble": DogSprite.rgb(0.95, 0.48, 0.07); default: DogSprite.rgb(0.95, 0.76, 0.19) }
+            for dx in [-2.0, 2.0] {
+                let e = CALayer(); e.backgroundColor = colour
+                e.frame = CGRect(x: CGFloat(dx + 1) * pp, y: 0, width: pp, height: pp)
+                l.addSublayer(e)
+            }
+            l.bounds = CGRect(x: 0, y: 0, width: 4 * pp, height: pp); l.anchorPoint = .zero
+            root.addSublayer(l); glintLayer = l
+            return l
+        }()
+        let peek = p.anim != .sleep || Int(t) % 23 < 2
+        let show = p.inKennel && peek
+        if glint.isHidden == show { glint.isHidden = !show }
+        let gp = CGPoint(x: (treeX + CGFloat(Oak.entrance.dx) - 2 * pp).rounded(), y: (screenH - floorY + CGFloat(Oak.entrance.h) - pp).rounded())
+        if glint.position != gp { glint.position = gp }
+        let hour = Calendar.current.component(.hour, from: Date())
+        let lit = hour >= 18 || hour < 7
+        let lantern = lanternLayer ?? {
+            let l = CALayer(); l.magnificationFilter = .nearest; l.zPosition = 0.5; l.anchorPoint = CGPoint(x: 0.5, y: 1)
+            root.addSublayer(l); lanternLayer = l
+            return l
+        }()
+        let (img, size) = ObjectSprite.image(id: lit ? "lanternLit" : "lantern", kind: lit ? "lanternLit" : "lantern")
+        if lantern.bounds.size != size { lantern.bounds = CGRect(origin: .zero, size: size) }
+        if lantern.contents as! CGImage? !== img { lantern.contents = img }
+        let lp = CGPoint(x: (treeX + CGFloat(Oak.lantern.dx)).rounded(), y: (screenH - floorY + CGFloat(Oak.lantern.top)).rounded())
+        if lantern.position != lp { lantern.position = lp }
     }
 
     /// In the birdhouse: its soft shadow shows through the curtained window and the round door (the rest of it is
@@ -190,4 +279,5 @@ extension World {
 
     func testFlyToWindow() { brain.debugFlyToWindow(env: environment()); render() }
     func testWindowClosed() { brain.debugWindowClosed(env: environment()); render() }
+    func testHunt() { brain.s.needs.hunger = max(brain.s.needs.hunger, 0.6); test(.hunt, "mouse") }
 }

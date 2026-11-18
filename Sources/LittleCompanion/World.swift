@@ -12,6 +12,7 @@ import QuartzCore
     var kennelFront: CALayer?
     var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse window and door
     var glowLayer: CALayer?, houseEnteredAt: CFTimeInterval?             // the birdhouse window's evening lamp
+    var glintLayer: CALayer?, lanternLayer: CALayer?                     // an owl's: its eyes glinting in the knothole, its lantern
     var windows: [Win] = [], windowsAt: CFTimeInterval = 0              // other apps' windows, polled for a bird
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
     var bedRims: [String: CALayer] = [:]
@@ -51,7 +52,7 @@ import QuartzCore
 
         // LC_PET=mango picks the pet for this run only (testing); a pet this build doesn't know falls back to Ollie
         let pet = ProcessInfo.processInfo.environment["LC_PET"] ?? UserDefaults.standard.string(forKey: "dog") ?? "ollie"
-        DogSprite.dog = (DogSprite.dogs + DogSprite.birds).contains { $0.0 == pet } ? pet : "ollie"
+        DogSprite.dog = (DogSprite.dogs + DogSprite.birds + DogSprite.owls).contains { $0.0 == pet } ? pet : "ollie"
         brain = Self.loadBrain(DogSprite.dog, home: nil, minX: Double(g.minX), maxX: Double(g.maxX))
 
         panel = DesktopPanel(frame: g.frame, onTop: onTop)
@@ -68,7 +69,7 @@ import QuartzCore
         emoteLayer.alignmentMode = .center
         emoteLayer.foregroundColor = DogSprite.rgb(0.42, 0.33, 0.55)
         Self.halo(emoteLayer)
-        emoteLayer.bounds = CGRect(x: 0, y: 0, width: 24, height: 20)
+        emoteLayer.bounds = CGRect(x: 0, y: 0, width: 40, height: 20)   // room for an owl's "hoo"
         emoteLayer.zPosition = 3
         root.addSublayer(ledgeLayer)
         root.addSublayer(dogLayer)
@@ -119,7 +120,13 @@ import QuartzCore
         }
         render()
         tick()
-        if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isBird {   // a bird's tour: onto a window (drag or close it), then its tree
+        if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
+            Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
+            Timer.scheduledTimer(withTimeInterval: 24, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testHunt() } }
+            for (at, act, target) in [(44.0, Act.hoot, nil), (54, .play, "pinecone"), (70, .sleep, "house")] as [(TimeInterval, Act, String?)] {
+                Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
+            }
+        } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isBird {   // a bird's tour: onto a window (drag or close it), then its tree
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
             for (at, act, target) in [(24.0, Act.swing, nil), (40, .bell, nil), (50, .splash, "birdbath"), (60, .eat, "seeds"), (75, .sleep, "house")] as [(TimeInterval, Act, String?)] {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
@@ -145,9 +152,9 @@ import QuartzCore
         if let saved = Store.load(dog) {
             b = Brain(state: saved.state)
             b.resume(afterOffline: Date().timeIntervalSince(saved.savedAt))
-        } else if DogSprite.isBird {   // a new bird arrives at its own tree
-            b = Brain(seed: UInt64.random(in: 1...UInt64.max), species: .bird)
-            b.s.objects = birdHome(maxX: maxX)
+        } else if DogSprite.isBird {   // a new bird arrives at its own tree (an owl at its oak)
+            b = Brain(seed: UInt64.random(in: 1...UInt64.max), species: DogSprite.isOwl ? .owl : .bird)
+            b.s.objects = DogSprite.isOwl ? owlHome(maxX: maxX) : birdHome(maxX: maxX)
             b.s.x = maxX - 160
         } else {
             b = Brain(seed: UInt64.random(in: 1...UInt64.max))
@@ -160,6 +167,7 @@ import QuartzCore
 
     /// Keeps the home inside the floor: a dog's tidied round its kennel, a bird's tree pinned at the right end.
     static func tidy(_ objects: inout [PetObject], minX: Double, maxX: Double) {
+        if DogSprite.isOwl { repairOwlHome(&objects, maxX: maxX); return }
         if DogSprite.isBird { repairBirdHome(&objects, maxX: maxX); return }
         repairHome(&objects, minX: minX, maxX: maxX) { Double(ObjectSprite.image(id: $0.id, kind: $0.kind.rawValue).1.width) / 2 }
     }
@@ -168,17 +176,17 @@ import QuartzCore
     func switchDog(to dog: String) {
         guard dog != DogSprite.dog else { return }
         save()
-        let wasBird = DogSprite.isBird
+        let wasBird = DogSprite.isBird, wasOwl = DogSprite.isOwl
         let home = brain.s.objects
         DogSprite.dog = dog
         UserDefaults.standard.set(dog, forKey: "dog")
-        brain = Self.loadBrain(dog, home: wasBird == DogSprite.isBird ? home : nil, minX: Double(minX), maxX: Double(maxX))   // a new dog moves into the old dog's home
+        brain = Self.loadBrain(dog, home: wasBird == DogSprite.isBird && wasOwl == DogSprite.isOwl ? home : nil, minX: Double(minX), maxX: Double(maxX))   // a new dog moves into the old dog's home
         spriteKey = ""; dogOrigin = CGPoint(x: -1, y: -1); dogTilt = 0
         dogLayer.setAffineTransform(.identity)
         dogLayer.bounds = CGRect(origin: .zero, size: DogSprite.size)
-        if wasBird != DogSprite.isBird {   // another species: rebuild the home's layers
-            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer, glowLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
-            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil; glowLayer = nil
+        if wasBird != DogSprite.isBird || wasOwl != DogSprite.isOwl {   // another species: rebuild the home's layers
+            for l in Array(objectLayers.values) + Array(bedRims.values) + [kennelFront, swingLayer, bellLayer, holeLayer, glowLayer, glintLayer, lanternLayer].compactMap({ $0 }) { l.removeFromSuperlayer() }
+            objectLayers = [:]; objectArt = [:]; bedRims = [:]; kennelFront = nil; swingLayer = nil; bellLayer = nil; holeLayer = nil; glowLayer = nil; glintLayer = nil; lanternLayer = nil
         }
         render()
     }

@@ -135,10 +135,11 @@ public func simulate(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> SimR
 
 /// One bird for `hours` on a 1440×900 screen with a few windows that get dragged, covered, minimised and closed through
 /// the day, the same workday pattern and busy spells as the dogs. Checks the invariants a bird's life depends on.
-public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> SimReport {
+public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2, species: Species = .bird) -> SimReport {
     let width = 1440.0, topY = 25.0, floorY = 830.0
-    var brain = Brain(seed: seed, species: .bird)
-    brain.s.objects = birdHome(maxX: width - 40)
+    var brain = Brain(seed: seed, species: species)
+    brain.s.objects = species == .owl ? owlHome(maxX: width - 40) : birdHome(maxX: width - 40)
+    var dayAsleep = 0.0, dayTotal = 0.0, nightAwake = 0.0, nightTotal = 0.0
     brain.s.x = 400
     var world = SplitMix(seed: seed ^ 0xB12D)
     var r = SimReport(seed: seed, hours: hours, personality: brain.s.personality)
@@ -216,6 +217,8 @@ public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> 
             } else { goneFor += dt; if goneFor > 1 { r.failures.append("perched on a window that's gone at t=\(Int(t))s"); goneFor = 0 } }
         }
         let asleep = s.activity.act == .sleep || s.activity.act == .kennel
+        if hour >= 10 && hour < 17 { dayTotal += dt; if asleep { dayAsleep += dt } }
+        if hour >= 22 || hour < 4 { nightTotal += dt; if !asleep { nightAwake += dt } }
         if s.activity.started != stuckStarted || asleep || flying { stuckStarted = s.activity.started; stuckSince = t }
         if t - stuckSince > 20 * 60 { r.failures.append("stuck awake doing \(s.activity.act) for 20 min at t=\(Int(t))s"); stuckSince = t }
         t += dt
@@ -229,6 +232,11 @@ public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2) -> 
         let awakeHours = hours * (1 - r.share(.sleep) - r.share(.kennel))
         if r.flights < 10 || Double(r.flights) / awakeHours > 15 { r.failures.append(String(format: "%d flights in %.1f awake hours (expected a few an hour)", r.flights, awakeHours)) }
         if r.windowVisits == 0 { r.failures.append("never perched on a window") }
+        if species == .owl {   // the other way round from the birds: asleep by day, up at night
+            if dayAsleep / dayTotal < 0.6 { r.failures.append(String(format: "an owl awake %.0f%% of the day (10–17)", 100 - dayAsleep / dayTotal * 100)) }
+            if nightAwake / nightTotal < 0.4 { r.failures.append(String(format: "an owl awake only %.0f%% of the night (22–04)", nightAwake / nightTotal * 100)) }
+            if (r.actTime[.hunt] ?? 0) == 0 { r.failures.append("never hunted") }
+        }
     }
     return r
 }

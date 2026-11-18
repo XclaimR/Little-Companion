@@ -31,8 +31,11 @@ public enum Kind: String, Codable, CaseIterable, Sendable, CodingKeyRepresentabl
     case bed, rug, foodBowl, waterBowl, ball, plush, rope, kennel
     case floor // not placeable: "sleeping on the bare floor" as a sleep spot with its own preference
     case tree, seedDish, waterDish   // a bird's home: its tree (branches, birdhouse, swing, bell) and its dishes
+    case oak, mouse, pinecone, feather, log   // an owl's: its hollow oak, its hunting mouse, a pinecone to bat, a feather, a log perch
     /// A dog's kinds, in the order its innate tastes are rolled (bird kinds come after, so a dog's seed rolls the same dog).
     public static let dogKinds: [Kind] = [.bed, .rug, .foodBowl, .waterBowl, .ball, .plush, .rope, .kennel, .floor]
+    /// A bird's kinds in the order they're rolled (later kinds come after, so a bird's seed rolls the same bird).
+    public static let birdKinds: [Kind] = dogKinds + [.tree, .seedDish, .waterDish]
     public var isToy: Bool { self == .ball || self == .plush || self == .rope }
     public var isSleepSpot: Bool { self == .bed || self == .rug }
 }
@@ -50,6 +53,7 @@ public struct PetObject: Codable, Sendable, Identifiable, Equatable {
 public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable {
     case idle, sit, lookAround, wander, sniff, sleep, stretch, groom, eat, drink, play, carry, zoomies, greet, react, follow, kennel
     case fly, hop, peck, splash, swing, bell   // a bird's: off to another perch, hopping along it, pecking the floor, bathing, its swing and bell
+    case hunt, hoot                            // an owl's: stalking and pouncing on its mouse; hooting at dusk and dawn
 
     /// Running pace (Activity.running), points/s.
     static let runSpeed = 130.0
@@ -60,7 +64,7 @@ public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable
     var cooldown: Double {
         switch self {
         case .zoomies: 1800; case .greet: 600; case .follow: 90; case .kennel: 1800; case .eat: 1200; case .drink: 600; case .stretch: 120
-        case .splash: 1800; case .swing: 1200; case .bell: 1200; default: 0
+        case .splash: 1800; case .swing: 1200; case .bell: 1200; case .hunt: 1200; case .hoot: 900; default: 0
         }
     }
 
@@ -72,6 +76,7 @@ public enum Act: String, Codable, CaseIterable, Sendable, CodingKeyRepresentable
         case .eat: 15...30; case .drink: 5...10; case .play: 15...60; case .carry: 1...2
         case .zoomies: 6...12; case .greet: 5...12; case .react: 1...1.5; case .follow: 6...14; case .kennel: 180...900
         case .fly: 4...20; case .hop: 3...8; case .peck: 8...25; case .splash: 5...10; case .swing: 15...45; case .bell: 3...7
+        case .hunt: 10...10; case .hoot: 5...9
         }
     }
 }
@@ -176,6 +181,7 @@ public struct DogState: Codable, Sendable, Equatable {
     public var wobbleUntil: Double?     // balancing (a wobbly landing, or riding a moving window)
     public var crestUntil: Double?      // crest up (excited or startled) until then
     public var lastNearYou: Double?     // last moved to a window near your recent activity
+    public var huntAt: Double?          // an owl: when it settled to stare at its mouse (the hunt runs on from there)
 }
 
 /// What the outside world tells the brain each tick.
@@ -240,6 +246,7 @@ public struct Pose: Sendable, Equatable {
     public var flight: FlightStage? = nil   // in the air, and how
     public var crest = false                // crest up: excited or startled
     public var wobble = false               // balancing
+    public var since: Double? = nil         // an owl's hunt: seconds since it settled to stare at the mouse
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.

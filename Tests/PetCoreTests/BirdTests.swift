@@ -103,3 +103,56 @@ func aBirdsDayHoldsInvariants(seed: UInt64) {
     let back = try JSONDecoder().decode(DogState.self, from: JSONEncoder().encode(b.s))
     #expect(back == b.s && back.species == .bird)
 }
+
+// MARK: - Owls
+
+private func owl(seed: UInt64 = 5) -> Brain {
+    var b = Brain(seed: seed, species: .owl)
+    b.s.objects = owlHome(maxX: 1400)
+    b.s.x = 600
+    return b
+}
+private func at(_ hour: Double) -> Environment { var e = env([]); e.hour = hour; return e }
+
+@Test func anOwlSleepsByDayAndWakesAtNight() {
+    var day = owl(), night = owl()
+    for _ in 0..<3600 { day.update(dt: 1, env: at(13)) }        // an hour around 1 pm
+    #expect(day.s.activity.act == .sleep || day.s.activity.act == .kennel)
+    #expect(day.s.activity.target == "house" && day.pose.inKennel)   // in its knothole
+    var awake = 0
+    for t in 0..<(7 * 3600) {   // through the night, 21:00 to 04:00
+        night.update(dt: 1, env: at((21 + Double(t) / 3600).truncatingRemainder(dividingBy: 24)))
+        if night.s.activity.act != .sleep && night.s.activity.act != .kennel { awake += 1 }
+    }
+    #expect(Double(awake) > 0.5 * 7 * 3600, "awake \(awake / 60) min of 7 h of night")
+}
+
+@Test func anOwlEatsByHuntingItsMouse() {
+    var b = owl()
+    b.s.needs.hunger = 0.9
+    let e = at(23)
+    b.debugStart(.hunt, target: "mouse", env: e)
+    var pounced = false, kinds: Set<String> = []
+    for _ in 0..<400 {
+        b.update(dt: 0.1, env: e)
+        if let s = b.pose.since { kinds.insert(s < 3 ? "stare" : s < 6 ? "mantle" : "eat") }
+        if b.s.jumpAt != nil && b.s.activity.act == .hunt { pounced = true }
+    }
+    #expect(kinds == ["stare", "mantle", "eat"] && pounced)
+    #expect(b.s.needs.hunger < 0.2)
+}
+
+@Test func anOwlWokenByDayJustLooksAtYou() {
+    var b = owl()
+    let e = at(13)
+    b.debugStart(.sleep, target: nil, env: e)
+    for _ in 0..<5 { b.update(dt: 1, env: e) }
+    b.poke(env: e)
+    #expect(b.s.activity.act == .idle && b.s.activity.front == true && b.s.emote == nil)   // no startle: a slow look, then back to sleep
+}
+
+@Test(arguments: [1, 2, 3, 4] as [UInt64])
+func anOwlsDayHoldsInvariants(seed: UInt64) {
+    let r = simulateBird(seed: seed, hours: 24, species: .owl)
+    #expect(r.failures.isEmpty, "\(r.failures.prefix(5))")
+}

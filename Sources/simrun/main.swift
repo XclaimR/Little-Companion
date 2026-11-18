@@ -1,5 +1,5 @@
 // Headless behaviour runner: fast-forwards dogs through simulated days and prints what they did.
-// Usage: swift run -c release simrun [dogs=4] [hours=24] [firstSeed=1] [birds=1]
+// Usage: swift run -c release simrun [dogs=4] [hours=24] [firstSeed=1] [birds=1] [owls=1]
 import Foundation
 import PetCore
 
@@ -33,12 +33,12 @@ for seed in firstSeed..<(firstSeed + UInt64(dogs)) {
         print("INVARIANT FAILURES (\(r.failures.count)):"); for f in r.failures.prefix(10) { print("  ✗ " + f) }; print("")
     }
 }
-let birds = Int(args.dropFirst(3).first ?? 1)
-for seed in firstSeed..<(firstSeed + UInt64(birds)) {
+let birds = Int(args.dropFirst(3).first ?? 1), owls = Int(args.dropFirst(4).first ?? 1)
+for (seed, species) in (firstSeed..<(firstSeed + UInt64(birds))).map({ ($0, Species.bird) }) + (firstSeed..<(firstSeed + UInt64(owls))).map({ ($0, Species.owl) }) {
     let clock = Date()
-    let r = simulateBird(seed: seed, hours: hours)
+    let r = simulateBird(seed: seed, hours: hours, species: species)
     let p = r.personality
-    print(String(format: "=== bird seed %llu — %.0fh simulated in %.2fs, %d decisions", seed, hours, Date().timeIntervalSince(clock), r.decisions))
+    print(String(format: "=== \(species.rawValue) seed %llu — %.0fh simulated in %.2fs, %d decisions", seed, hours, Date().timeIntervalSince(clock), r.decisions))
     print(String(format: "personality: play %.2f  lazy %.2f  affection %.2f  curious %.2f  energy %.2f  clumsy %.2f",
                  p.playfulness, p.laziness, p.affection, p.curiosity, p.energy, p.clumsy))
     print("flights \(r.flights) · falls \(r.falls) · window visits \(r.windowVisits) · ride ticks \(r.rides) · busy retreats \(r.busyRetreats)")

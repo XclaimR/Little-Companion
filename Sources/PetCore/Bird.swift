@@ -1,8 +1,8 @@
 import Foundation
 
 /// What kind of pet. One engine: a species is its acts, its home and how it moves (dogs walk the floor;
-/// birds hop and fly between perches at different heights).
-public enum Species: String, Codable, Sendable { case dog, bird }
+/// birds hop and fly between perches at different heights; owls are birds that live by night).
+public enum Species: String, Codable, Sendable { case dog, bird, owl }
 
 /// A rectangle in screen points, top-left origin (PetCore stays free of CoreGraphics).
 public struct Box: Codable, Sendable, Equatable {
@@ -53,6 +53,39 @@ public enum Tree {
     public static let halfWidth = 32 * k
 }
 
+/// An owl's hollow oak: perches on the level stretches of its crooked branches, and the knothole it sleeps in by day.
+/// shortcut: measured from tools/art/owl_home.py (pixels × 1.5); change both together.
+public enum Oak {
+    static let k = 1.5
+    public static let branches = [Tree.Ledge(from: -22 * k, to: -17 * k, h: 30 * k),   // low left
+                                  Tree.Ledge(from: -28 * k, to: -18 * k, h: 60 * k),   // high left
+                                  Tree.Ledge(from: 18 * k, to: 24 * k, h: 45 * k),     // right; the lantern hangs past its tip
+                                  Tree.Ledge(from: 18 * k, to: 23 * k, h: 71 * k)]     // top right
+    public static let house = (dx: 0.0, h: 31 * k)        // the lip of the knothole
+    public static let entrance = (dx: 0.0, h: 37 * k)     // where its eyes glint while it's inside
+    public static let lantern = (dx: 26 * k, top: 42 * k)
+    public static let logTop = 7 * k
+}
+
+/// An owl's home: the oak at the right end of the floor, its bath, and its toys along the floor to the left.
+public func owlHome(maxX: Double) -> [PetObject] {
+    var o: [PetObject] = []
+    repairOwlHome(&o, maxX: maxX)
+    return o
+}
+
+/// The oak stays pinned at the right end; the bath and toys sit to its left (the pinecone may be batted about).
+public func repairOwlHome(_ objects: inout [PetObject], maxX: Double) {
+    let tx = maxX - 16   // the oak is wider than the bird tree: keep its right branch tip on screen
+    let home: [(String, Kind, Double)] = [("oak", .oak, 0), ("birdbath", .waterDish, -100), ("mouse", .mouse, -150), ("pinecone", .pinecone, -185),
+                                          ("feather", .feather, -215), ("log", .log, -265)]
+    for (id, kind, _) in home where !objects.contains(where: { $0.kind == kind }) { objects.append(PetObject(id: id, kind: kind, x: 0)) }
+    for i in objects.indices {
+        guard let (_, _, dx) = home.first(where: { $0.1 == objects[i].kind }) else { continue }
+        if objects[i].kind != .pinecone || objects[i].x == 0 || objects[i].x > tx - 60 { objects[i].x = tx + dx }
+    }
+}
+
 /// A bird's home: its tree at the right end of the floor, seed and water dishes at its foot on the left.
 public func birdHome(maxX: Double) -> [PetObject] {
     var o = [PetObject(id: "tree", kind: .tree, x: 0), PetObject(id: "seeds", kind: .seedDish, x: 0), PetObject(id: "birdbath", kind: .waterDish, x: 0)]
@@ -98,14 +131,19 @@ public func perchableWindows(_ env: Environment) -> [(win: Win, xs: [Double])] {
 struct Spot { var perch: String; var x: Double; var y: Double; var dx: Double? = nil }
 
 extension Brain {
-    var isBird: Bool { s.species == .bird }
+    var isBird: Bool { s.species == .bird || s.species == .owl }   // owls run on the bird engine
+    var isOwl: Bool { s.species == .owl }
+    var ledges: [Tree.Ledge] { isOwl ? Oak.branches : Tree.branches }
+    var peg: (dx: Double, h: Double) { isOwl ? Oak.house : Tree.house }
+    /// Sleep pressure from the clock: an owl's day is a bird's night (awake from dusk to dawn).
+    func clock(_ env: Environment) -> Double { Self.sleepiness(hour: isOwl ? (env.hour + 12).truncatingRemainder(dividingBy: 24) : env.hour) }
     static let flySpeed = 230.0, hopSpeed = 50.0, takeoff = 0.3
 
     func object(_ kind: Kind) -> PetObject? { s.objects.first { $0.kind == kind } }
-    var treeX: Double { object(.tree)?.x ?? 1000 }
+    var treeX: Double { (object(.tree) ?? object(.oak))?.x ?? 1000 }
     func windowID(_ perch: String?) -> Int? { perch.flatMap { $0.hasPrefix("w:") ? Int($0.dropFirst(2)) : nil } }
     func branch(_ perch: String?) -> Int? {
-        guard let p = perch, p.hasPrefix("b"), let i = Int(p.dropFirst()), Tree.branches.indices.contains(i) else { return nil }
+        guard let p = perch, p.hasPrefix("b"), let i = Int(p.dropFirst()), ledges.indices.contains(i) else { return nil }
         return i
     }
     /// In its birdhouse (or on the way in or out).
@@ -117,10 +155,11 @@ extension Brain {
         case "floor": return env.floorY
         case "swing": return env.floorY - Tree.swing.h
         case "bell": return env.floorY - Tree.bell.h
-        case "house": return env.floorY - Tree.house.h
+        case "house": return env.floorY - peg.h
+        case "log": return env.floorY - Oak.logTop
         default:
             if let id = windowID(perch) { return env.windows.first { $0.id == id }?.box.y }
-            return branch(perch).map { env.floorY - Tree.branches[$0].h }
+            return branch(perch).map { env.floorY - ledges[$0].h }
         }
     }
 
@@ -131,7 +170,8 @@ extension Brain {
             let lo = max(w.box.x + 96, env.minX), hi = min(w.box.maxX - 24, env.maxX)
             return lo <= hi ? lo...hi : nil
         }
-        return branch(perch).map { treeX + Tree.branches[$0].from ... treeX + Tree.branches[$0].to }
+        if perch == "log", let l = object(.log) { return l.x - 12...l.x + 12 }
+        return branch(perch).map { treeX + ledges[$0].from ... treeX + ledges[$0].to }
     }
 
     // MARK: - Choosing where to go
@@ -141,10 +181,11 @@ extension Brain {
     mutating func choosePerch(_ env: Environment, nearYou: Bool = false) -> Spot? {
         var options: [(Spot, Double)] = []
         if !nearYou {
-            for (i, b) in Tree.branches.enumerated() where "b\(i)" != s.perch {
+            for (i, b) in ledges.enumerated() where "b\(i)" != s.perch {
                 options.append((Spot(perch: "b\(i)", x: treeX + rand(b.from...b.to), y: env.floorY - b.h), 1))
             }
             if s.perch != "floor" { options.append((Spot(perch: "floor", x: rand(env.minX...max(env.minX, treeX - 60)), y: env.floorY), 0.9)) }
+            if isOwl, let l = object(.log), s.perch != "log" { options.append((Spot(perch: "log", x: l.x + rand(-8...8), y: env.floorY - Oak.logTop), 0.8)) }   // a low watch post
         }
         let wins = perchableWindows(env)
         for (w, xs) in wins where "w:\(w.id)" != s.perch {
@@ -160,7 +201,7 @@ extension Brain {
     }
 
     mutating func birdCandidates(_ env: Environment) -> [Candidate] {
-        let n = s.needs, p = s.personality, circ = Self.sleepiness(hour: env.hour)
+        let n = s.needs, p = s.personality, circ = clock(env)
         var c: [Candidate] = []
         let away = env.userIdle > Brain.awayAfter ? 1.8 : 1
         let night = 1 - 0.9 * circ, calmNight = 1 - 0.5 * circ
@@ -175,10 +216,19 @@ extension Brain {
             c.append(.init(act: .splash, target: "birdbath", score: 0.12 * (0.4 + p.playfulness) * (0.5 + n.boredom) * night))
         }
         let fun = (0.3 + n.boredom) * (0.3 + p.playfulness) * (1 - 0.8 * n.tiredness) * night
-        c.append(.init(act: .swing, target: nil, score: 0.2 * fun))
-        c.append(.init(act: .bell, target: nil, score: 0.2 * fun))
-        let onGround = s.perch == "floor" || windowID(s.perch) != nil
-        c.append(.init(act: .fly, target: nil, score: 0.18 * (0.2 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.85 * circ)))   // energetic birds fly more
+        if isOwl {   // no swing or bell: it hunts its mouse (that's how it eats), bats its pinecone and hoots at dusk and dawn
+            if object(.mouse) != nil {
+                c.append(.init(act: .hunt, target: "mouse", score: pow(n.hunger, 2) * 5 * (n.hunger < 0.25 ? 0.05 : 1) + 0.12 * (0.3 + p.curiosity) * night))
+            }
+            if object(.pinecone) != nil { c.append(.init(act: .play, target: "pinecone", score: 0.25 * fun)) }
+            let h = env.hour, twilight = (h >= 18.5 && h < 21.5) || (h >= 4.5 && h < 7)
+            c.append(.init(act: .hoot, target: nil, score: (twilight ? 0.6 : 0.03) * (0.4 + p.independence) * (1 - circ)))
+        } else {
+            c.append(.init(act: .swing, target: nil, score: 0.2 * fun))
+            c.append(.init(act: .bell, target: nil, score: 0.2 * fun))
+        }
+        let onGround = s.perch == "floor" || s.perch == "log" || windowID(s.perch) != nil
+        c.append(.init(act: .fly, target: nil, score: (isOwl ? 0.11 : 0.18) * (0.2 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.85 * circ)))   // energetic birds fly more; owls less
         c.append(.init(act: .hop, target: nil, score: 0.3 * (0.4 + p.energy) * (onGround ? 1 : 0.4) * (1 - 0.85 * circ)))
         c.append(.init(act: .peck, target: nil, score: 0.25 * (0.3 + p.curiosity) * (0.5 + n.hunger) * (onGround ? 1 : 0.3) * (1 - 0.8 * circ)))
         c.append(.init(act: .idle, target: nil, score: 0.6 * (0.5 + p.laziness) * calmNight))
@@ -200,7 +250,7 @@ extension Brain {
         // A bird sits a good while between moves: perched spells run longer than a dog's.
         let span: ClosedRange<Double> = switch act { case .idle: 40...180; case .lookAround: 8...25; case .groom: 20...60; case .fly: 20...90; default: act.duration }
         var a = Activity(act: act, target: target, destX: nil, remaining: rand(span), started: s.time)
-        if act == .sleep { a.remaining *= 1 + 2 * Self.sleepiness(hour: env.hour) }
+        if act == .sleep { a.remaining *= 1 + 2 * clock(env) }
         let here = s.perch ?? "air", fy = env.floorY   // no perch: its window just went from under it
         var spot: Spot?
         switch act {
@@ -210,14 +260,18 @@ extension Brain {
         case .eat: if let o = object(.seedDish) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -16 : 16), y: fy) }
         case .drink: if let o = object(.waterDish) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -16 : 16), y: fy) }
         case .splash: if let o = object(.waterDish) { spot = Spot(perch: "floor", x: o.x, y: fy) }   // right in it
+        case .hunt:   // lands a little way off and stares at it first
+            if let m = object(.mouse) { let side = s.x < m.x ? -1.0 : 1; spot = Spot(perch: "floor", x: m.x + side * 26, y: fy) }
+        case .play where isOwl:
+            if let o = object(.pinecone) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -18 : 18), y: fy) }
         case .swing: spot = Spot(perch: "swing", x: treeX + Tree.swing.dx, y: fy - Tree.swing.h)
         case .bell: spot = Spot(perch: "bell", x: treeX + Tree.bell.dx, y: fy - Tree.bell.h)
         case .kennel:
-            spot = Spot(perch: "house", x: treeX + Tree.house.dx, y: fy - Tree.house.h); a.kennel = .door
+            spot = Spot(perch: "house", x: treeX + peg.dx, y: fy - peg.h); a.kennel = .door
         case .sleep where target == "house":
-            spot = Spot(perch: "house", x: treeX + Tree.house.dx, y: fy - Tree.house.h); a.kennel = .door
+            spot = Spot(perch: "house", x: treeX + peg.dx, y: fy - peg.h); a.kennel = .door
         case .sleep where branch(here) == nil:   // a daytime nap, fluffed up on a branch
-            let i = Int.random(in: Tree.branches.indices, using: &s.rng), b = Tree.branches[i]
+            let i = Int.random(in: ledges.indices, using: &s.rng), b = ledges[i]
             spot = Spot(perch: "b\(i)", x: treeX + rand(b.from...b.to), y: fy - b.h)
         case .peck where here != "floor":
             spot = Spot(perch: "floor", x: rand(env.minX...max(env.minX, treeX - 60)), y: fy)
@@ -243,12 +297,14 @@ extension Brain {
     mutating func birdArrive(_ a: inout Activity, _ env: Environment) {
         if let o = s.objects.first(where: { $0.id == a.target }), a.act != .splash { s.facing = o.x >= s.x ? 1 : -1 }
         if a.act == .bell { s.facing = 1 }
+        if a.act == .hunt { s.huntAt = s.time; a.remaining = 10 }
         if a.target == "house" && (a.act == .kennel || a.act == .sleep) && a.kennel == .door { a.kennel = .inside; s.perch = "house" }
         if a.act == .lookAround || a.act == .idle { a.front = rand(0...1) < 0.15 + 0.3 * s.personality.affection }
         if a.act == .greet { a.front = true }
     }
 
     mutating func birdPerform(_ a: inout Activity, _ dt: Double, _ env: Environment) {
+        if a.act != .hunt { s.huntAt = nil }
         switch a.act {
         case .eat:
             s.needs.hunger -= dt / 20
@@ -258,9 +314,23 @@ extension Brain {
             if s.needs.thirst <= 0 { a.remaining = 0 }
         case .splash: s.needs.boredom -= dt / 60; s.needs.thirst -= dt / 40
         case .swing, .bell: s.needs.boredom -= dt / 40
+        case .hunt:   // stare 3 s, pounce onto it, mantle over it, then eat
+            let t = s.time - (s.huntAt ?? s.time)
+            if t >= 3, let m = object(.mouse), abs(s.x - m.x) > 4 { s.x = m.x - s.facing * 4; jump(height: 12, length: 0.35) }
+            if t >= 6 { s.needs.hunger -= dt / 4 }
+            s.needs.boredom -= dt / 60
+        case .play:   // bats the pinecone along the floor and follows it
+            s.needs.boredom -= dt / 40
+            if s.time >= (s.nextRoll ?? 0), let i = s.objects.firstIndex(where: { $0.id == "pinecone" }) {
+                s.nextRoll = s.time + rand(2.5...5)
+                let x = min(max(s.objects[i].x + s.facing * rand(15...40), env.minX), treeX - 60)
+                s.objects[i].x = x
+                a.destX = x + (s.x < x ? -18 : 18)
+            }
+        case .hoot: if rand(0...1) < dt * 0.6 { setEmote("hoo", 1.4) }   // a puffed throat and a soft (silent) hoo
         case .sleep:
             if a.target != "house" || a.kennel == .inside {
-                if s.needs.tiredness <= 0.02 && Self.sleepiness(hour: env.hour) < 0.6 { a.remaining = 0 }
+                if s.needs.tiredness <= 0.02 && clock(env) < 0.6 { a.remaining = 0 }
                 dreamTick()
             }
         case .kennel: if a.kennel == .inside && s.needs.tiredness > 0.3 { dreamTick() }
@@ -395,7 +465,7 @@ extension Brain {
 
     mutating func updateBird(_ dt: Double, _ env: Environment) {
         s.time += dt
-        let circ = Self.sleepiness(hour: env.hour)
+        let circ = clock(env)
         calm = env.reduceMotion
         if s.lastIdle > Brain.awayAfter && env.userIdle < 5 { welcomeBack(env: env) }
         s.lastIdle = env.userIdle
@@ -454,6 +524,10 @@ extension Brain {
     /// A click near it: startled, crest up; maybe a hop or a short flight.
     mutating func birdPoke(_ env: Environment) {
         guard s.flight == nil, !inHouse else { return }
+        if isOwl && s.activity.act == .sleep {   // woken by day: one slow, unimpressed look at you, then back to sleep
+            finish(); s.activity = Activity(act: .idle, target: nil, destX: nil, remaining: rand(3...5), started: s.time); s.activity.front = true
+            return
+        }
         setEmote("!", 1.2); s.crestUntil = s.time + 3
         finish()
         let r = rand(0...1)
@@ -478,7 +552,7 @@ extension Brain {
     /// App relaunch: it's in its birdhouse and comes out soon.
     mutating func birdResume() {
         s.flight = nil; s.perch = "house"; s.perchDX = nil; s.y = nil
-        s.x = treeX + Tree.house.dx
+        s.x = treeX + peg.dx
         s.activity = Activity(act: .kennel, target: "house", destX: nil, remaining: rand(20...90), started: s.time)
         s.activity.kennel = .inside
     }
@@ -499,7 +573,8 @@ extension Brain {
                 else if t > 1 - 0.3 / f.len { p.flight = .flare }   // the last moment: wings back, feet forward
                 else {
                     let (_, ya) = bezier(f, max(0, t - 0.03)), (_, yb) = bezier(f, min(1, t + 0.03))
-                    p.flight = (yb - ya) / 0.06 / f.len > 120 ? .glide : .flap   // flaps rising or level, glides down
+                    let sink = (yb - ya) / 0.06 / f.len
+                    p.flight = isOwl ? (sink < -60 || t < 0.25 ? .flap : .glide) : sink > 120 ? .glide : .flap   // flaps rising or level, glides down; owls glide most of the way
                 }
             }
             p.emote = s.emote
@@ -512,6 +587,7 @@ extension Brain {
         p.attention = s.attention
         if s.attention == .head { p.lookX = s.lastCursorX }
         p.front = a.destX == nil && (a.front == true || a.act == .greet)
+        if a.act == .hunt, let at = s.huntAt { p.since = s.time - at }
         if p.anim == .sleep || p.inKennel { p.twitch = s.time < s.twitchUntil }
         return p
     }

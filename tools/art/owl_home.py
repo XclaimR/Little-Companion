@@ -8,7 +8,7 @@ import bird_sheet as B, owl_sheet as O
 from bird_home import blank, put, ell, outline
 C = {k[len('owlhome-'):]: v for k, v in B.HEX.items() if k.startswith('owlhome-')}   # colours in palette.json
 
-def hollow_oak():
+def hollow_oak(glint=False):
     """A gnarled old oak: a wide trunk with a knothole the owl sleeps in (by day you see its eyes glint in the dark),
     bare crooked branches to perch on, a few leaves left."""
     TW, TH = 70, 84
@@ -28,7 +28,7 @@ def hollow_oak():
         ell(g, cx, cy, rx, ry, 'L', lambda x, y: g[y][x] is None)
     ell(g, 35, 48, 4.5, 6, 'a')                       # the knothole
     ell(g, 35, 48, 6, 7.5, 'B', lambda x, y: g[y][x] == 'b')
-    put(g, 33, 47, 'y'); put(g, 37, 47, 'y')          # its eyes glinting inside
+    if glint: put(g, 33, 47, 'y'); put(g, 37, 47, 'y')   # its eyes glinting inside (the app draws these only while it's home)
     return outline(g, skip=lambda x, y: False)
 
 def mouse():
@@ -55,13 +55,13 @@ def feather():
         g[y][3] = 'z'
     return outline(g)
 
-def lantern():
+def lantern(lit=True):
     g = blank(9, 14)
     for y in range(0, 3): g[y][4] = 'c'
     for x in range(1, 8): g[3][x] = 'm'; g[12][x] = 'm'
     for y in range(4, 12):
-        for x in range(1, 8): g[y][x] = 'F' if 2 <= x <= 6 else 'm'
-    g[7][4] = 'f'; g[8][4] = 'f'; g[7][3] = 'f'
+        for x in range(1, 8): g[y][x] = ('F' if lit else 'M') if 2 <= x <= 6 else 'm'
+    if lit: g[7][4] = 'f'; g[8][4] = 'f'; g[7][3] = 'f'
     return outline(g)
 
 def log_perch():
@@ -71,6 +71,12 @@ def log_perch():
     ell(g, 3, 4, 2.5, 3, 'h'); ell(g, 3, 4, 1.2, 1.5, 'w')
     put(g, 14, 0, 'G'); put(g, 15, 0, 'g'); put(g, 20, 0, 'G')
     return outline(g)
+
+def grids():
+    """For the objects atlas (kennel.py): the oak, the toys and the lantern lit and unlit."""
+    return {'oak': hollow_oak(), 'mouse': mouse(), 'pinecone': pinecone(), 'feather': feather(), 'log': log_perch(),
+            'lantern': lantern(lit=False), 'lanternLit': lantern()}
+KEYS = {name: {k: 'owlhome-' + k for k in C} for name in ('oak', 'mouse', 'pinecone', 'feather', 'log', 'lantern', 'lanternLit')}
 
 if __name__ == '__main__':
     out = (sys.argv[1] if len(sys.argv) > 1 else B.HERE) + '/build'
@@ -86,7 +92,7 @@ if __name__ == '__main__':
                             Y, X = (bottom - len(gr) + y) * S + sy, (left + x) * S + sx
                             if 0 <= Y < Ht * S and 0 <= X < Wd * S: img[Y][X] = col(k)
     hx = lambda k: tuple(int(C[k][i:i + 2], 16) for i in (1, 3, 5))
-    oak = hollow_oak(); left = 20
+    oak = hollow_oak(glint=True); left = 20
     blit(oak, left, floor, hx)
     for name, frame, x, h in (('bramble', 'idle', left + 38, 84 - 38 + 1), ('pip', 'front', left + 13, 84 - 55 + 1),
                               ('moth', 'tiltL', left + 50, 0), ('hedwig', 'slowBlink', left + 82, 0)):

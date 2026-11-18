@@ -27,7 +27,7 @@ app.run()
         menu.addItem(readOnlyNote)
         let pets = menu.addItem(withTitle: "Change pet", action: nil, keyEquivalent: "")
         let species = NSMenu()
-        for (title, list) in [("Dogs", DogSprite.dogs), ("Birds", DogSprite.birds)] {   // Change pet ▸ Dogs ▸ … / Birds ▸ …
+        for (title, list) in [("Dogs", DogSprite.dogs), ("Birds", DogSprite.birds), ("Owls", DogSprite.owls)] {   // Change pet ▸ Dogs / Birds / Owls ▸ …
             let group = NSMenu()
             for (id, name, kind) in list {
                 let item = group.addItem(withTitle: "\(name) — \(kind)", action: #selector(pickDog(_:)), keyEquivalent: "")
@@ -48,7 +48,8 @@ app.run()
                                  ("Test: busy Mac on/off", #selector(testBusy)),
                                  ("Test (bird): fly to a window", #selector(testFlyToWindow)), ("Test (bird): pretend its window closed", #selector(testWindowClosed)),
                                  ("Test (bird): swing", #selector(testSwing)), ("Test (bird): ring the bell", #selector(testBell)),
-                                 ("Test (bird): splash", #selector(testSplash)), ("Test (bird): sleep in the birdhouse", #selector(testHouseSleep))] {
+                                 ("Test (bird): splash", #selector(testSplash)), ("Test (bird): sleep in the birdhouse", #selector(testHouseSleep)),
+                                 ("Test (owl): hunt the mouse", #selector(testHunt)), ("Test (owl): hoot", #selector(testHoot)), ("Test (owl): bat the pinecone", #selector(testPinecone))] {
                 menu.addItem(withTitle: title, action: sel, keyEquivalent: "").target = self
             }
             menu.addItem(.separator())
@@ -108,6 +109,9 @@ app.run()
     @objc func testBell() { world?.test(.bell) }
     @objc func testSplash() { world?.test(.splash, "birdbath") }
     @objc func testHouseSleep() { world?.test(.sleep, "house") }
+    @objc func testHunt() { world?.testHunt() }
+    @objc func testHoot() { world?.test(.hoot) }
+    @objc func testPinecone() { world?.test(.play, "pinecone") }
     @objc func testZoomies() { world?.test(.zoomies) }
     @objc func testFollow() { world?.test(.follow) }
     @objc func testSit() { world?.test(.sit) }

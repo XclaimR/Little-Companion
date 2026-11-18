@@ -16,10 +16,10 @@ public struct Brain: Sendable {
         var rng = SplitMix(seed: seed)
         let p = Personality.random(&rng)
         var innate: [Kind: Double] = [:]
-        for k in species == .bird ? Kind.allCases : Kind.dogKinds { innate[k] = Double.random(in: -0.5...0.8, using: &rng) }
+        for k in species == .owl ? Kind.allCases : species == .bird ? Kind.birdKinds : Kind.dogKinds { innate[k] = Double.random(in: -0.5...0.8, using: &rng) }
         s = DogState(personality: p, innate: innate,
                      activity: Activity(act: .idle, target: nil, destX: nil, remaining: 3, started: 0), rng: rng)
-        if species == .bird { s.species = .bird; s.perch = "floor" }
+        if species != .dog { s.species = species; s.perch = "floor" }
     }
 
     public init(state: DogState) { s = state }
@@ -543,7 +543,7 @@ public struct Brain: Sendable {
         let a = s.activity.act, n = s.needs
         switch a {
         case .sleep: return n.hunger > 0.97 || n.thirst > 0.97
-        case .eat, .drink, .react, .stretch: return false
+        case .eat, .drink, .react, .stretch, .hunt: return false   // an owl eats by hunting: never cut a hunt short
         default: return (n.hunger > 0.85 && a != .eat) || (n.thirst > 0.85 && a != .drink) || n.tiredness > 0.92
         }
     }
