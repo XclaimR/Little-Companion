@@ -141,6 +141,28 @@ def bird_portraits(sheets):
             frames.append(scaled(c, 3))
         gif(frames, DOCS + f'bird-{name}.gif', 6)
 
+NIGHT = (35, 39, 69, 255)
+
+def owl_portraits(sheets):
+    """Each owl, on a night background: glides in, flares, lands, swivels its head right round, tilts, blinks, hoots, faces you."""
+    flap = [16, 17, 18, 19, 19]
+    for name, s in sheets.items():
+        frames = []
+        for i in range(30):
+            c = Canvas(64, 40, NIGHT)
+            for (x, y) in ((8, 6), (50, 4), (58, 14), (20, 3)): c.rect(x, y, x + 1, y + 1, (200, 200, 230, 255))   # a few stars
+            if i < 9:
+                u = i / 9; bird(c, s, flap[i % 5], 4 + 28 * u, 22 + 10 * u - 6 * (1 - (2 * u - 1) ** 2))
+            elif i < 11: bird(c, s, 20, 34, 38)                   # landing flare
+            elif i < 14: bird(c, s, 0, 34, 38)                    # perched
+            elif i < 18: bird(c, s, 4, 34, 38)                    # head swivelled right round
+            elif i < 20: bird(c, s, 5, 34, 38)                    # a curious tilt
+            elif i < 21: bird(c, s, 2, 34, 38)                    # blink
+            elif i < 25: bird(c, s, 9 + (i % 2), 34, 38)          # hoot
+            else: bird(c, s, 1, 34, 38)                           # facing you
+            frames.append(scaled(c, 3))
+        gif(frames, DOCS + f'owl-{name}.gif', 6)
+
 def moments(sheet):
     picks = [19, 23, 44, 11, 79, 72, 76, 15]   # belly-up nap, ball carry, plush shake, sit facing you, ear scratch, jump, tumble, sit facing away
     c = Canvas(len(picks) * 52 + 4, 40, CREAM)
@@ -177,4 +199,5 @@ if __name__ == '__main__':
     objs = load(RES + 'objects.png'); atlas = json.load(open(RES + 'objects.json'))
     moments(sheets['ollie']); portraits(sheets); hero(sheets, objs, atlas)
     bird_portraits({n: load(RES + n + '.png') for n in ('mango', 'pearl', 'kiwi', 'sunny')})
+    owl_portraits({n: load(RES + n + '.png') for n in ('moth', 'pip', 'hedwig', 'bramble')})
     print(sorted(os.listdir(DOCS)))
