@@ -44,7 +44,7 @@ enum DogSprite {
                           swing, bellA, bellB, nap, sleep, dream, startled, fallA, fallB, recover, frontBlink, recoverB }
     /// An owl's frames, in the order tools/art/owl_sheet.py draws them (32×32, facing right).
     enum Owl: Int { case idle, front, blink, slowBlink, swivelBack, tiltL, tiltR, alert, fluffed, hootA, hootB, walkA, walkB, pounce, mantle,
-                         takeoff, flapUp, flapMid, flapDown, glide, flare, preen, stretch, eatA, eatB, dayDoze, sleep, dream, startled, fallA, fallB, recover }
+                         takeoff, flapUp, flapMid, flapDown, glide, flare, preen, stretch, eatA, eatB, dayDoze, sleep, dream, startled, fallA, fallB, recover, mantleBare, gulp }
     static var pixels: CGSize { isBird ? CGSize(width: 32, height: 32) : CGSize(width: 48, height: 36) }
     static let pointsPerPixel: CGFloat = 1.5   // 72×54 pt: 3 device pixels per art pixel on Retina, so edges stay crisp
     static var size: CGSize { CGSize(width: pixels.width * pointsPerPixel, height: pixels.height * pointsPerPixel) }

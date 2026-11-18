@@ -124,22 +124,49 @@ private func at(_ hour: Double) -> Environment { var e = env([]); e.hour = hour;
         night.update(dt: 1, env: at((21 + Double(t) / 3600).truncatingRemainder(dividingBy: 24)))
         if night.s.activity.act != .sleep && night.s.activity.act != .kennel { awake += 1 }
     }
-    #expect(Double(awake) > 0.5 * 7 * 3600, "awake \(awake / 60) min of 7 h of night")
+    #expect(Double(awake) > 0.4 * 7 * 3600, "awake \(awake / 60) min of 7 h of night")   // as simrun: owls rest a while around 2–3 am
 }
 
-@Test func anOwlEatsByHuntingItsMouse() {
-    var b = owl()
-    b.s.needs.hunger = 0.9
+@Test func anOwlEatsByHuntingARustleAndPlaysWithItsToyMouse() {
     let e = at(23)
-    b.debugStart(.hunt, target: "mouse", env: e)
-    var pounced = false, kinds: Set<String> = []
-    for _ in 0..<400 {
+    var b = owl()   // a rustle in the floor: stare, pounce, mantle over it, gulp; nothing is drawn under its wings
+    b.s.needs.hunger = 0.9
+    b.debugStart(.hunt, target: nil, env: e)
+    var phases: [String] = []
+    for _ in 0..<300 {
         b.update(dt: 0.1, env: e)
-        if let s = b.pose.since { kinds.insert(s < 3 ? "stare" : s < 6 ? "mantle" : "eat") }
-        if b.s.jumpAt != nil && b.s.activity.act == .hunt { pounced = true }
+        if let s = b.pose.since, !b.pose.toy { let ph = s < 3 ? "stare" : s < 5 ? "mantle" : "gulp"; if phases.last != ph { phases.append(ph) } }
     }
-    #expect(kinds == ["stare", "mantle", "eat"] && pounced)
-    #expect(b.s.needs.hunger < 0.2)
+    #expect(phases == ["stare", "mantle", "gulp"] && b.s.needs.hunger < 0.2)
+    var t = owl()   // the plush mouse is a toy: fun, not food
+    t.s.needs.hunger = 0.5; t.s.needs.boredom = 0.8
+    t.debugStart(.hunt, target: "mouse", env: e)
+    var toy = false
+    for _ in 0..<300 { t.update(dt: 0.1, env: e); if t.pose.toy { toy = true } }
+    #expect(toy && t.s.needs.hunger >= 0.5 && t.s.needs.boredom < 0.8)
+}
+
+@Test func anOwlRollsItsPineconeAlongInsteadOfTeleportingIt() {
+    let e = at(23)
+    var b = owl()
+    b.debugStart(.play, target: "pinecone", env: e)
+    var last = b.s.objects.first { $0.id == "pinecone" }!.x, biggest = 0.0, moved = 0.0, jumpsWhileWalking = 0
+    for _ in 0..<600 {
+        b.update(dt: 0.05, env: e)
+        let x = b.s.objects.first { $0.id == "pinecone" }!.x
+        biggest = max(biggest, abs(x - last)); moved += abs(x - last); last = x
+        if b.s.activity.destX != nil && b.s.jumpAt != nil { jumpsWhileWalking += 1 }
+    }
+    #expect(moved > 20 && biggest < 6)   // it rolls a few points a tick, never jumps across the floor
+    #expect(jumpsWhileWalking == 0)      // owls waddle after it; they don't hop
+}
+
+@Test func atNightAnOwlSitsByItsLantern() {
+    var b = owl()
+    let e = at(22)
+    b.debugStart(.idle, target: "lantern", env: e)
+    for _ in 0..<100 { b.update(dt: 0.1, env: e) }
+    #expect(b.s.perch == "b2" && b.s.facing == 1 && abs(b.s.x - (b.treeX + Oak.branches[2].to)) < 1)
 }
 
 @Test func anOwlWokenByDayJustLooksAtYou() {
@@ -155,4 +182,31 @@ private func at(_ hour: Double) -> Environment { var e = env([]); e.hour = hour;
 func anOwlsDayHoldsInvariants(seed: UInt64) {
     let r = simulateBird(seed: seed, hours: 24, species: .owl)
     #expect(r.failures.isEmpty, "\(r.failures.prefix(5))")
+}
+
+@Test func anOwlCarriesItsMouseUpABranchFlingsItAndPouncesOnIt() {
+    var b = owl()
+    let e = at(23)
+    let start = b.s.objects.first { $0.id == "mouse" }!.x
+    b.debugStart(.carry, target: "mouse", env: e)
+    var heldOnBranch = false, trackedInFlight = true, fell = false, landedAt: Double? = nil, chased = false
+    for _ in 0..<1500 {
+        b.update(dt: 0.1, env: e)
+        let m = b.s.objects.first { $0.id == "mouse" }!.x
+        if b.s.carrying == "mouse" {
+            if b.branch(b.s.perch) != nil { heldOnBranch = true }
+            if b.s.flight != nil && abs(m - b.s.x) > 0.01 { trackedInFlight = false }
+        }
+        if b.s.toss != nil { fell = true }
+        if fell && b.s.toss == nil && landedAt == nil { landedAt = m }
+        if landedAt != nil && b.s.activity.act == .hunt && b.s.activity.target == "mouse" { chased = true; break }
+    }
+    #expect(heldOnBranch && trackedInFlight && fell && chased)
+    #expect(landedAt != nil && landedAt != start && b.s.objects.first { $0.id == "mouse" }!.x == landedAt)   // it fell somewhere new and lies there
+}
+
+@Test func theFeatherIsGoneFromOwlHomes() {
+    var old = owlHome(maxX: 1400) + [PetObject(id: "feather", kind: .feather, x: 1100)]   // an owl saved before it was retired
+    repairOwlHome(&old, maxX: 1400)
+    #expect(!old.contains { $0.kind == .feather } && !owlHome(maxX: 1400).contains { $0.kind == .feather })
 }

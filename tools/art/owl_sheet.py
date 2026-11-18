@@ -192,6 +192,9 @@ FRAMES = [
     ('fallA',      lambda: owl(theta=150, cx=16, cy=16, tilt=40, wing='up', far='half', legs='dangle', eyes='wide', tufts='up')),
     ('fallB',      lambda: owl(theta=330, cx=16, cy=16, tilt=-30, wing='down', far='half', legs='dangle', eyes='wide', tufts='up')),
     ('recover',    lambda: owl(theta=40, cx=15, cy=17, wing='up', far='up', legs='dangle', eyes='wide', tufts='up')),
+    # appended so earlier indices stay put: hunting a rustle in the floor, where no prey is ever drawn
+    ('mantleBare', lambda: owl(theta=40, wing='mantle', far='mantleFar', face=.7, hdy=2.5, tufts='flat')),
+    ('gulp',       lambda: owl(theta=4, hdy=-1, face=.9, tilt=-18, beak='open', throat=.4, tufts='mid')),   # head up, swallowing
 ]
 NAMES = [n for n, _ in FRAMES]
 

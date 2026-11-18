@@ -124,7 +124,7 @@ extension World {
         if !emote.isEmpty { emoteLayer.position = CGPoint(x: r.midX + CGFloat(p.facing) * 8, y: screenH - r.minY + 10) }
         renderObjects(p, dog: r)
         if DogSprite.isOwl, let m = objectLayers["mouse"] {   // pounced: the mouse is under its wings (drawn into its frame) until it's eaten
-            let caught = p.act == .hunt && (p.since ?? 0) >= 3.2
+            let caught = p.act == .hunt && p.toy && (3.2..<6).contains(p.since ?? 0)   // under its wings, then let go
             if m.isHidden != caught { m.isHidden = caught }
         }
         CATransaction.commit()
@@ -144,14 +144,15 @@ extension World {
             }
         }
         if p.inKennel { return p.anim == .sleep ? .sleep : .fluffed }
-        if p.act == .hunt, let s = p.since {   // stare, pounce, cloak its wings over the mouse, eat
+        if p.act == .hunt, let s = p.since {   // stare, pounce, cloak its wings over it; the toy is let go, a catch is gulped
             if s < 3 { return .alert }
             if s < 3.4 { return .pounce }
-            if s < 6 { return .mantle }
-            return Int(t * 2) % 2 == 0 ? .eatA : .eatB
+            if p.toy { return s < 6 ? .mantle : .front }
+            return s < 5 ? .mantleBare : s < 6.2 ? .gulp : .idle
         }
+        if p.act == .carry, let s = p.since, s < 0.45 { return .pounce }   // flinging the mouse off the branch
         if p.wobble { return .flare }
-        if p.jump != nil { return p.act == .play ? .pounce : .walkB }
+        if p.jump != nil { return p.act == .play ? .pounce : .walkB }   // a quick bat at the pinecone
         if p.anim == .walk { return Int(p.x / 6) % 2 == 0 ? .walkA : .walkB }   // a waddle
         switch p.act {
         case .sleep?: return p.twitch && Int(t * 3) % 2 == 0 ? .dream : .dayDoze   // asleep on one leg
@@ -159,7 +160,7 @@ extension World {
         case .splash?: return Int(t * 3) % 2 == 0 ? .fluffed : .preen
         case .groom?: return t.truncatingRemainder(dividingBy: 4) < 2.5 ? .preen : .idle
         case .stretch?: return .stretch
-        case .play?: return .alert                                                     // eyeing the pinecone before the next bat
+        case .play?: return .idle   // side-on, watching the pinecone (no front-facing frames mid-game: they read as a flip)
         case .hoot?: let k = t.truncatingRemainder(dividingBy: 2.4); return k < 0.5 ? .hootA : k < 1.2 ? .hootB : k < 1.5 ? .hootA : .idle
         case .react?: return .startled
         case .greet?: return .front
@@ -168,8 +169,9 @@ extension World {
         if p.front { return t.truncatingRemainder(dividingBy: 3) < 0.7 ? .slowBlink : .front }   // a slow blink at you
         if p.attention == .head, let lx = p.lookX { return (lx - p.x) * p.facing < 0 ? .swivelBack : (lx < p.x ? .tiltL : .tiltR) }
         if p.act == .lookAround { return [DogSprite.Owl.idle, .swivelBack, .front, .idle][Int(t / 1.5) % 4] }
-        let k = t.truncatingRemainder(dividingBy: 11)
-        return k > 8 && k < 9.2 ? .slowBlink : k > 4 && k < 5.5 ? .swivelBack : .idle
+        // perched: never quite still — a look over its shoulder, a slow blink, a ruffle, every couple of seconds
+        let k = (t + p.x / 37).truncatingRemainder(dividingBy: 8)
+        return k < 2 ? .idle : k < 3.2 ? .swivelBack : k < 5 ? .idle : k < 5.6 ? .slowBlink : k < 7 ? .idle : .fluffed
     }
 
     /// The owl's knothole: while it's home, its eyes glint in the dark (now and then, while it sleeps by day, it peeks).
@@ -193,8 +195,7 @@ extension World {
         if glint.isHidden == show { glint.isHidden = !show }
         let gp = CGPoint(x: (treeX + CGFloat(Oak.entrance.dx) - 2 * pp).rounded(), y: (screenH - floorY + CGFloat(Oak.entrance.h) - pp).rounded())
         if glint.position != gp { glint.position = gp }
-        let hour = Calendar.current.component(.hour, from: Date())
-        let lit = hour >= 18 || hour < 7
+        let lit = Oak.lit(clockHour)
         let lantern = lanternLayer ?? {
             let l = CALayer(); l.magnificationFilter = .nearest; l.zPosition = 0.5; l.anchorPoint = CGPoint(x: 0.5, y: 1)
             root.addSublayer(l); lanternLayer = l
@@ -223,7 +224,7 @@ extension World {
             glowLayer = l
             return l
         }()
-        let hour = Double(Calendar.current.component(.hour, from: Date()))
+        let hour = clockHour
         let evening = hour >= 18 || hour < 6
         let lampOn = p.inKennel && evening && (p.anim != .sleep || now - (houseEnteredAt ?? now) < 90)   // settling in, then lights out
         if glow.isHidden == lampOn { glow.isHidden = !lampOn }
@@ -279,5 +280,5 @@ extension World {
 
     func testFlyToWindow() { brain.debugFlyToWindow(env: environment()); render() }
     func testWindowClosed() { brain.debugWindowClosed(env: environment()); render() }
-    func testHunt() { brain.s.needs.hunger = max(brain.s.needs.hunger, 0.6); test(.hunt, "mouse") }
+    func testHunt() { brain.s.needs.hunger = max(brain.s.needs.hunger, 0.6); test(.hunt, nil) }   // a rustle in the floor: it eats
 }

@@ -20,6 +20,15 @@ public struct Win: Sendable, Equatable {
     public init(id: Int, box: Box) { self.id = id; self.box = box }
 }
 
+/// A toy flung from a perch: it flies on at `vx` and falls under gravity to the floor.
+public struct Toss: Codable, Sendable, Equatable {
+    public var id: String
+    public var x0, y0, vx, at: Double
+    public static let g = 900.0   // points/s²
+    public func fallTime(floorY: Double) -> Double { sqrt(2 * max(0, floorY - y0) / Toss.g) }
+    public func y(_ t: Double, floorY: Double) -> Double { min(floorY, y0 + 0.5 * Toss.g * t * t) }
+}
+
 /// A flight is a quadratic Bézier from (x0, y0) through the pull of (vx, vy) to (x1, y1); a fall drops under gravity;
 /// a recovery is a few hard flaps that catch it in the air.
 public struct Flight: Codable, Sendable, Equatable {
@@ -65,6 +74,8 @@ public enum Oak {
     public static let entrance = (dx: 0.0, h: 37 * k)     // where its eyes glint while it's inside
     public static let lantern = (dx: 26 * k, top: 42 * k)
     public static let logTop = 7 * k
+    /// The lantern is lit from dusk to dawn.
+    public static func lit(_ hour: Double) -> Bool { hour >= 18 || hour < 7 }
 }
 
 /// An owl's home: the oak at the right end of the floor, its bath, and its toys along the floor to the left.
@@ -78,11 +89,13 @@ public func owlHome(maxX: Double) -> [PetObject] {
 public func repairOwlHome(_ objects: inout [PetObject], maxX: Double) {
     let tx = maxX - 16   // the oak is wider than the bird tree: keep its right branch tip on screen
     let home: [(String, Kind, Double)] = [("oak", .oak, 0), ("birdbath", .waterDish, -100), ("mouse", .mouse, -150), ("pinecone", .pinecone, -185),
-                                          ("feather", .feather, -215), ("log", .log, -265)]
+                                          ("log", .log, -240)]
+    objects.removeAll { $0.kind == .feather }   // the feather toy was retired
     for (id, kind, _) in home where !objects.contains(where: { $0.kind == kind }) { objects.append(PetObject(id: id, kind: kind, x: 0)) }
     for i in objects.indices {
         guard let (_, _, dx) = home.first(where: { $0.1 == objects[i].kind }) else { continue }
-        if objects[i].kind != .pinecone || objects[i].x == 0 || objects[i].x > tx - 60 { objects[i].x = tx + dx }
+        let movable = objects[i].kind == .pinecone || objects[i].kind == .mouse   // toys it bats or throws stay where they ended up
+        if !movable || objects[i].x == 0 || objects[i].x > tx - 60 { objects[i].x = tx + dx }
     }
 }
 
@@ -217,10 +230,15 @@ extension Brain {
         }
         let fun = (0.3 + n.boredom) * (0.3 + p.playfulness) * (1 - 0.8 * n.tiredness) * night
         if isOwl {   // no swing or bell: it hunts its mouse (that's how it eats), bats its pinecone and hoots at dusk and dawn
-            if object(.mouse) != nil {
-                c.append(.init(act: .hunt, target: "mouse", score: pow(n.hunger, 2) * 5 * (n.hunger < 0.25 ? 0.05 : 1) + 0.12 * (0.3 + p.curiosity) * night))
+            // It eats by hunting a rustle in the floor (nothing is ever drawn); the plush mouse is a toy it stalks for fun.
+            c.append(.init(act: .hunt, target: nil, score: pow(n.hunger, 2) * 5 * (n.hunger < 0.25 ? 0.05 : 1)))
+            if object(.mouse) != nil { c.append(.init(act: .hunt, target: "mouse", score: 0.3 * fun * (0.4 + p.curiosity))) }
+            if Oak.lit(env.hour) {   // the lantern: it likes to sit by it at night, and goes there first when it comes out after dark
+                let justOut = s.time - max(s.lastDone[.sleep] ?? -1e9, s.lastDone[.kennel] ?? -1e9) < 60
+                c.append(.init(act: .idle, target: "lantern", score: justOut ? 4 : 0.15 * night))
             }
             if object(.pinecone) != nil { c.append(.init(act: .play, target: "pinecone", score: 0.25 * fun)) }
+            if object(.mouse) != nil { c.append(.init(act: .carry, target: "mouse", score: 0.06 * fun)) }   // up a branch with it, then flings it down
             let h = env.hour, twilight = (h >= 18.5 && h < 21.5) || (h >= 4.5 && h < 7)
             c.append(.init(act: .hoot, target: nil, score: (twilight ? 0.6 : 0.03) * (0.4 + p.independence) * (1 - circ)))
         } else {
@@ -260,8 +278,16 @@ extension Brain {
         case .eat: if let o = object(.seedDish) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -16 : 16), y: fy) }
         case .drink: if let o = object(.waterDish) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -16 : 16), y: fy) }
         case .splash: if let o = object(.waterDish) { spot = Spot(perch: "floor", x: o.x, y: fy) }   // right in it
-        case .hunt:   // lands a little way off and stares at it first
+        case .hunt where target == "mouse":   // lands a little way off its toy and stares at it first
             if let m = object(.mouse) { let side = s.x < m.x ? -1.0 : 1; spot = Spot(perch: "floor", x: m.x + side * 26, y: fy) }
+        case .hunt:   // somewhere on the floor it has heard a rustle (near it, if it's already down there)
+            let lo = env.minX + 30, hi = max(env.minX + 30, treeX - 90)
+            let x = here == "floor" ? s.x + (rand(0...1) < 0.5 ? -1 : 1) * rand(30...90) : rand(lo...hi)
+            spot = Spot(perch: "floor", x: min(max(x, lo), hi), y: fy)
+        case .idle where target == "lantern":   // on the lantern branch, right beside the light
+            spot = Spot(perch: "b2", x: treeX + Oak.branches[2].to, y: fy - Oak.branches[2].h)
+        case .carry where isOwl:   // down to the toy first
+            if let o = s.objects.first(where: { $0.id == target }) { spot = Spot(perch: "floor", x: o.x, y: fy) }
         case .play where isOwl:
             if let o = object(.pinecone) { spot = Spot(perch: "floor", x: o.x + (s.x < o.x ? -18 : 18), y: fy) }
         case .swing: spot = Spot(perch: "swing", x: treeX + Tree.swing.dx, y: fy - Tree.swing.h)
@@ -280,7 +306,7 @@ extension Brain {
         default: break
         }
         if let spot {
-            if spot.perch == here, let r = perchRange(here, env) {
+            if spot.perch == here, let r = perchRange(here, env), !(isOwl && abs(spot.x - s.x) > 100) {   // an owl flies anything further than a short waddle
                 a.destX = min(max(spot.x, r.lowerBound), r.upperBound)   // it's on this perch already: hop over
             } else if spot.perch != here || abs(spot.x - s.x) > 2 {
                 s.activity = a
@@ -297,7 +323,18 @@ extension Brain {
     mutating func birdArrive(_ a: inout Activity, _ env: Environment) {
         if let o = s.objects.first(where: { $0.id == a.target }), a.act != .splash { s.facing = o.x >= s.x ? 1 : -1 }
         if a.act == .bell { s.facing = 1 }
-        if a.act == .hunt { s.huntAt = s.time; a.remaining = 10 }
+        if a.act == .hunt { s.huntAt = s.time; a.remaining = a.target == "mouse" ? 8 : 7; a.phase = nil }
+        if a.target == "lantern" { s.facing = 1; a.front = false }   // facing the light
+        if isOwl && a.act == .carry {   // picks the mouse up in its talons, flies it up a branch, sits with it a while, then flings it down
+            switch a.phase {
+            case nil:
+                s.carrying = a.target; a.phase = "up"
+                let i = Int.random(in: ledges.indices, using: &s.rng), b = ledges[i]
+                flyTo(Spot(perch: "b\(i)", x: treeX + rand(b.from...b.to), y: env.floorY - b.h), env)
+            case "up"?: a.phase = "hold"; a.remaining = rand(10...30)
+            default: break
+            }
+        }
         if a.target == "house" && (a.act == .kennel || a.act == .sleep) && a.kennel == .door { a.kennel = .inside; s.perch = "house" }
         if a.act == .lookAround || a.act == .idle { a.front = rand(0...1) < 0.15 + 0.3 * s.personality.affection }
         if a.act == .greet { a.front = true }
@@ -305,6 +342,7 @@ extension Brain {
 
     mutating func birdPerform(_ a: inout Activity, _ dt: Double, _ env: Environment) {
         if a.act != .hunt { s.huntAt = nil }
+        if a.act != .play { s.rollTo = nil }
         switch a.act {
         case .eat:
             s.needs.hunger -= dt / 20
@@ -314,18 +352,28 @@ extension Brain {
             if s.needs.thirst <= 0 { a.remaining = 0 }
         case .splash: s.needs.boredom -= dt / 60; s.needs.thirst -= dt / 40
         case .swing, .bell: s.needs.boredom -= dt / 40
-        case .hunt:   // stare 3 s, pounce onto it, mantle over it, then eat
+        case .hunt:   // stare 3 s, pounce, mantle; the toy is let go again, a real catch is gulped down
             let t = s.time - (s.huntAt ?? s.time)
-            if t >= 3, let m = object(.mouse), abs(s.x - m.x) > 4 { s.x = m.x - s.facing * 4; jump(height: 12, length: 0.35) }
-            if t >= 6 { s.needs.hunger -= dt / 4 }
-            s.needs.boredom -= dt / 60
-        case .play:   // bats the pinecone along the floor and follows it
+            if t >= 3, a.phase == nil {
+                a.phase = "pounced"
+                if a.target == "mouse", let m = object(.mouse) { s.x = m.x - s.facing * 4 }
+                else { s.x = min(max(s.x + s.facing * 20, env.minX), env.maxX) }
+                jump(height: 12, length: 0.35)
+            }
+            if a.target == "mouse" { s.needs.boredom -= dt / 30 } else if t >= 5 { s.needs.hunger -= dt / 1.5 }
+        case .play:   // a paw-strike sends the pinecone rolling; it waddles after it and watches it
             s.needs.boredom -= dt / 40
-            if s.time >= (s.nextRoll ?? 0), let i = s.objects.firstIndex(where: { $0.id == "pinecone" }) {
-                s.nextRoll = s.time + rand(2.5...5)
-                let x = min(max(s.objects[i].x + s.facing * rand(15...40), env.minX), treeX - 60)
-                s.objects[i].x = x
-                a.destX = x + (s.x < x ? -18 : 18)
+            if let i = s.objects.firstIndex(where: { $0.id == "pinecone" }) {
+                if let to = s.rollTo {   // rolling, slowing to a stop
+                    let d = to - s.objects[i].x, step = max(12, min(90, abs(d) * 3)) * dt
+                    if abs(d) <= step { s.objects[i].x = to; s.rollTo = nil } else { s.objects[i].x += d > 0 ? step : -step }
+                } else if a.destX == nil, s.jumpAt == nil, case let px = s.objects[i].x, abs(s.x - (px + (s.x < px ? -18 : 18))) > 3 {
+                    a.destX = px + (s.x < px ? -18 : 18)   // the bat's done and it has stopped rolling: waddle after it
+                } else if s.time >= (s.nextRoll ?? 0), a.destX == nil {
+                    s.nextRoll = s.time + rand(3...6)
+                    s.rollTo = min(max(s.objects[i].x + s.facing * rand(20...45), env.minX), treeX - 60)
+                    jump(height: 5, length: 0.3)   // the bat
+                }
             }
         case .hoot: if rand(0...1) < dt * 0.6 { setEmote("hoo", 1.4) }   // a puffed throat and a soft (silent) hoo
         case .sleep:
@@ -464,7 +512,16 @@ extension Brain {
     // MARK: - The tick
 
     mutating func updateBird(_ dt: Double, _ env: Environment) {
+        defer { if let c = s.carrying, let i = s.objects.firstIndex(where: { $0.id == c }) { s.objects[i].x = s.x } }   // a toy in its talons goes where it goes
         s.time += dt
+        if let t = s.toss, let i = s.objects.firstIndex(where: { $0.id == t.id }) {   // a flung toy flies on and falls
+            let e = s.time - t.at, T = t.fallTime(floorY: env.floorY)
+            s.objects[i].x = min(max(t.x0 + t.vx * min(e, T), env.minX), treeX - 60)
+            if e >= T {
+                s.toss = nil
+                if s.activity.act == .carry && s.activity.phase == "thrown" && s.flight == nil { finish(); birdStart(.hunt, target: t.id, env) }   // and after it!
+            }
+        }
         let circ = clock(env)
         calm = env.reduceMotion
         if s.lastIdle > Brain.awayAfter && env.userIdle < 5 { welcomeBack(env: env) }
@@ -492,8 +549,8 @@ extension Brain {
             else if s.busyRetreat == true { a.remaining = min(a.remaining, rand(20...90)); s.busyRetreat = nil }
         }
         if let dest = a.destX {   // hopping along its perch
-            let step = Brain.hopSpeed * dt, d = dest - s.x
-            if s.jumpAt == nil { jump(height: 7, length: 0.22) }
+            let step = (isOwl ? 18 : Brain.hopSpeed) * dt, d = dest - s.x   // an owl waddles, slowly
+            if s.jumpAt == nil && !isOwl { jump(height: 7, length: 0.22) }   // birds hop; owls waddle
             if abs(d) <= step { s.x = dest; a.destX = nil; birdArrive(&a, env) }
             else { s.x += d > 0 ? step : -step; s.facing = d > 0 ? 1 : -1 }
             if let id = windowID(s.perch), let w = env.windows.first(where: { $0.id == id }) { s.perchDX = s.x - w.box.x }
@@ -504,6 +561,12 @@ extension Brain {
         s.activity = a
         guard a.remaining <= 0, a.destX == nil else { return }
         if inHouse { s.activity.kennel = .exit; s.activity.remaining = 1.5; return }   // pops out of the entrance first
+        if isOwl, a.act == .carry, a.phase == "hold", let c = s.carrying {   // fling it down off the branch; it'll pounce on it where it lands
+            s.toss = Toss(id: c, x0: s.x + s.facing * 6, y0: (s.y ?? env.floorY) - 6, vx: s.facing * rand(50...90), at: s.time)
+            s.carrying = nil
+            s.activity.phase = "thrown"; s.activity.remaining = 60
+            return
+        }
         finish(); decide(env)
     }
 
@@ -559,7 +622,7 @@ extension Brain {
 
     var birdPose: Pose {
         let a = s.activity
-        var p = Pose(x: s.x, facing: s.facing, anim: .stand, carrying: nil, emote: s.emote, twitch: s.time < s.twitchUntil)
+        var p = Pose(x: s.x, facing: s.facing, anim: .stand, carrying: s.carrying, emote: s.emote, twitch: s.time < s.twitchUntil)
         p.y = s.y; p.act = a.act
         p.crest = s.time < (s.crestUntil ?? 0) || a.act == .react || a.act == .greet || a.act == .bell
         p.wobble = s.time < (s.wobbleUntil ?? 0)
@@ -587,7 +650,8 @@ extension Brain {
         p.attention = s.attention
         if s.attention == .head { p.lookX = s.lastCursorX }
         p.front = a.destX == nil && (a.front == true || a.act == .greet)
-        if a.act == .hunt, let at = s.huntAt { p.since = s.time - at }
+        if a.act == .hunt, let at = s.huntAt { p.since = s.time - at; p.toy = a.target == "mouse" }
+        if a.act == .carry, let t = s.toss { p.since = s.time - t.at }   // the fling
         if p.anim == .sleep || p.inKennel { p.twitch = s.time < s.twitchUntil }
         return p
     }

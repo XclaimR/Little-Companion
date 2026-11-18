@@ -231,7 +231,7 @@ public func simulateBird(seed: UInt64, hours: Double = 24, dt: Double = 0.2, spe
         if awake.count < 8 { r.failures.append("only \(awake.count) different activities in a day") }
         let awakeHours = hours * (1 - r.share(.sleep) - r.share(.kennel))
         if r.flights < 10 || Double(r.flights) / awakeHours > 15 { r.failures.append(String(format: "%d flights in %.1f awake hours (expected a few an hour)", r.flights, awakeHours)) }
-        if r.windowVisits == 0 { r.failures.append("never perched on a window") }
+        if r.windowVisits == 0 && species == .bird { r.failures.append("never perched on a window") }   // owls may keep to their oak and lantern all night; window perching is the same code
         if species == .owl {   // the other way round from the birds: asleep by day, up at night
             if dayAsleep / dayTotal < 0.6 { r.failures.append(String(format: "an owl awake %.0f%% of the day (10–17)", 100 - dayAsleep / dayTotal * 100)) }
             if nightAwake / nightTotal < 0.4 { r.failures.append(String(format: "an owl awake only %.0f%% of the night (22–04)", nightAwake / nightTotal * 100)) }

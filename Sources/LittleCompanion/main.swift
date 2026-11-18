@@ -49,7 +49,7 @@ app.run()
                                  ("Test (bird): fly to a window", #selector(testFlyToWindow)), ("Test (bird): pretend its window closed", #selector(testWindowClosed)),
                                  ("Test (bird): swing", #selector(testSwing)), ("Test (bird): ring the bell", #selector(testBell)),
                                  ("Test (bird): splash", #selector(testSplash)), ("Test (bird): sleep in the birdhouse", #selector(testHouseSleep)),
-                                 ("Test (owl): hunt the mouse", #selector(testHunt)), ("Test (owl): hoot", #selector(testHoot)), ("Test (owl): bat the pinecone", #selector(testPinecone))] {
+                                 ("Test (owl): hunt (eats)", #selector(testHunt)), ("Test (owl): play with the toy mouse", #selector(testToyMouse)), ("Test (owl): hoot", #selector(testHoot)), ("Test (owl): bat the pinecone", #selector(testPinecone))] {
                 menu.addItem(withTitle: title, action: sel, keyEquivalent: "").target = self
             }
             menu.addItem(.separator())
@@ -110,6 +110,7 @@ app.run()
     @objc func testSplash() { world?.test(.splash, "birdbath") }
     @objc func testHouseSleep() { world?.test(.sleep, "house") }
     @objc func testHunt() { world?.testHunt() }
+    @objc func testToyMouse() { world?.test(.hunt, "mouse") }
     @objc func testHoot() { world?.test(.hoot) }
     @objc func testPinecone() { world?.test(.play, "pinecone") }
     @objc func testZoomies() { world?.test(.zoomies) }

@@ -14,6 +14,7 @@ final class DesktopPanel: NSPanel {
         ignoresMouseEvents = true
         level = onTop ? .floating : NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        if onTop { collectionBehavior.insert(.fullScreenAuxiliary) }   // LC_TOP (testing, recordings): visible over full-screen apps too
     }
 
     override var canBecomeKey: Bool { false }

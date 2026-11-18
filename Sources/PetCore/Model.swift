@@ -31,7 +31,7 @@ public enum Kind: String, Codable, CaseIterable, Sendable, CodingKeyRepresentabl
     case bed, rug, foodBowl, waterBowl, ball, plush, rope, kennel
     case floor // not placeable: "sleeping on the bare floor" as a sleep spot with its own preference
     case tree, seedDish, waterDish   // a bird's home: its tree (branches, birdhouse, swing, bell) and its dishes
-    case oak, mouse, pinecone, feather, log   // an owl's: its hollow oak, its hunting mouse, a pinecone to bat, a feather, a log perch
+    case oak, mouse, pinecone, feather, log   // an owl's: its hollow oak, its toy mouse, a pinecone to bat, a log perch (feather: retired, kept so older saves load)
     /// A dog's kinds, in the order its innate tastes are rolled (bird kinds come after, so a dog's seed rolls the same dog).
     public static let dogKinds: [Kind] = [.bed, .rug, .foodBowl, .waterBowl, .ball, .plush, .rope, .kennel, .floor]
     /// A bird's kinds in the order they're rolled (later kinds come after, so a bird's seed rolls the same bird).
@@ -181,7 +181,9 @@ public struct DogState: Codable, Sendable, Equatable {
     public var wobbleUntil: Double?     // balancing (a wobbly landing, or riding a moving window)
     public var crestUntil: Double?      // crest up (excited or startled) until then
     public var lastNearYou: Double?     // last moved to a window near your recent activity
-    public var huntAt: Double?          // an owl: when it settled to stare at its mouse (the hunt runs on from there)
+    public var huntAt: Double?          // an owl: when it settled to stare (the hunt runs on from there)
+    public var rollTo: Double?          // an owl's pinecone is rolling to here
+    public var toss: Toss?              // an owl has just flung its toy mouse off a branch: it's falling
 }
 
 /// What the outside world tells the brain each tick.
@@ -246,7 +248,8 @@ public struct Pose: Sendable, Equatable {
     public var flight: FlightStage? = nil   // in the air, and how
     public var crest = false                // crest up: excited or startled
     public var wobble = false               // balancing
-    public var since: Double? = nil         // an owl's hunt: seconds since it settled to stare at the mouse
+    public var since: Double? = nil         // an owl's hunt: seconds since it settled to stare
+    public var toy = false                  // ...at its toy mouse (else a rustle in the floor)
 }
 
 /// Keeps a home tidy: a kennel exists, nothing overlaps the kennel, and everything sits inside the floor's range.

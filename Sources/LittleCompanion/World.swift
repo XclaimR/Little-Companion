@@ -38,6 +38,14 @@ import QuartzCore
     var logged = (started: -1.0, jump: false, attention: "", pose: "")
     /// LC_SPEED=10 runs the dog's life 10× faster, for testing behaviour (walking looks fast too).
     let speed = max(0.1, Double(ProcessInfo.processInfo.environment["LC_SPEED"] ?? "") ?? 1)
+    /// LC_HOUR=23 pins the clock to that hour (testing: an owl's night, the lantern, a dog's bedtime).
+    let pinnedHour = Double(ProcessInfo.processInfo.environment["LC_HOUR"] ?? "")
+    /// Local time of day, 0..<24 (or the pinned testing hour).
+    var clockHour: Double {
+        if let pinnedHour { return pinnedHour }
+        let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        return Double(now.hour ?? 12) + Double(now.minute ?? 0) / 60
+    }
     var onStateChange: (() -> Void)?               // lets the menu refresh (hidden / shown)
 
     /// The floor (top of the Dock) and the walkable range on a screen, in this screen's top-left coordinates.
@@ -123,7 +131,7 @@ import QuartzCore
         if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
             Timer.scheduledTimer(withTimeInterval: 24, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testHunt() } }
-            for (at, act, target) in [(44.0, Act.hoot, nil), (54, .play, "pinecone"), (70, .sleep, "house")] as [(TimeInterval, Act, String?)] {
+            for (at, act, target) in [(38.0, Act.carry, "mouse"), (90, .hoot, nil), (100, .play, "pinecone"), (118, .idle, "lantern"), (132, .sleep, "house")] as [(TimeInterval, Act, String?)] {
                 Timer.scheduledTimer(withTimeInterval: at, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(act, target) } }
             }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isBird {   // a bird's tour: onto a window (drag or close it), then its tree
@@ -290,13 +298,12 @@ import QuartzCore
 
     func environment() -> Environment {
         let c = cursor
-        let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
         // kCGAnyInputEventType: seconds since any keyboard/mouse input. Needs no permission.
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
         let onScreen = c.x >= 0 && c.x <= screenW
-        if DogSprite.isBird { return birdEnvironment(cursor: c, idle: idle, hour: Double(now.hour ?? 12) + Double(now.minute ?? 0) / 60) }
+        if DogSprite.isBird { return birdEnvironment(cursor: c, idle: idle, hour: clockHour) }
         return Environment(minX: Double(minX), maxX: Double(maxX),
-                           hour: Double(now.hour ?? 12) + Double(now.minute ?? 0) / 60,
+                           hour: clockHour,
                            userIdle: idle,
                            cursorX: onScreen && abs(c.y - floorY) < 160 ? Double(c.x) : nil, // only notices a cursor near its floor
                            systemBusy: systemBusy(),
@@ -506,7 +513,9 @@ import QuartzCore
             let held = o.id == p.carrying
             let baked = held && p.holding != nil   // drawn into the dog's frame instead
             if l.isHidden != baked { l.isHidden = baked }
-            let bottom = held ? dog.minY + mouthRow * DogSprite.pointsPerPixel : floorY // carried toys ride in its mouth
+            let talons = dog.maxY - DogSprite.footRows * DogSprite.pointsPerPixel + size.height * 0.6   // a bird carries it in its talons
+            var bottom = held ? (DogSprite.isBird ? talons : dog.minY + mouthRow * DogSprite.pointsPerPixel) : floorY // carried toys ride in its mouth
+            if let t = brain.s.toss, t.id == o.id { bottom = CGFloat(t.y(brain.s.time - t.at, floorY: Double(floorY))) + size.height * 0.5 }   // flung: falling
             let sink: CGFloat = o.kind == .kennel ? DogSprite.footRows * DogSprite.pointsPerPixel : 0   // kennel walls reach the dog's lowest outline row
             let pos = CGPoint(x: (CGFloat(o.x) - size.width / 2).rounded(), y: (screenH - bottom - sink).rounded())
             if l.position != pos { l.position = pos }

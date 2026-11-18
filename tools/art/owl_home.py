@@ -1,6 +1,6 @@
 # An owl's home and toys (designs; not in the app yet). The hollow oak was chosen for every owl: it sleeps by day in the
-# knothole (its eyes glint in the dark) and perches on the bare branches at night. Toys: mouse (its hunting toy), pinecone,
-# feather, lantern (glows dusk to dawn), log perch; it bathes in the birds' water dish.
+# knothole (its eyes glint in the dark) and perches on the bare branches at night. Toys: the mouse (it stalks it, and carries
+# it up a branch to fling it down), the pinecone (batted along), the lantern (glows dusk to dawn), a log perch; it bathes in the birds' water dish.
 # python3 owl_home.py tools/art  -> tools/art/build/owl_home_preview.png (the oak with the owls on it, and the toys)
 import json, math, os, sys
 sys.path.insert(0, __file__.rsplit('/', 1)[0] or '.')
@@ -47,14 +47,6 @@ def pinecone():
     put(g, 4, 0, 'g'); put(g, 4, 1, 'g')
     return outline(g)
 
-def feather():
-    g = blank(7, 14)
-    for y in range(1, 13):
-        w = 2 if 3 < y < 10 else 1
-        for x in range(3 - w, 4 + w): g[y][x] = 's' if (y % 3) else 'S'
-        g[y][3] = 'z'
-    return outline(g)
-
 def lantern(lit=True):
     g = blank(9, 14)
     for y in range(0, 3): g[y][4] = 'c'
@@ -74,9 +66,9 @@ def log_perch():
 
 def grids():
     """For the objects atlas (kennel.py): the oak, the toys and the lantern lit and unlit."""
-    return {'oak': hollow_oak(), 'mouse': mouse(), 'pinecone': pinecone(), 'feather': feather(), 'log': log_perch(),
+    return {'oak': hollow_oak(), 'mouse': mouse(), 'pinecone': pinecone(), 'log': log_perch(),
             'lantern': lantern(lit=False), 'lanternLit': lantern()}
-KEYS = {name: {k: 'owlhome-' + k for k in C} for name in ('oak', 'mouse', 'pinecone', 'feather', 'log', 'lantern', 'lanternLit')}
+KEYS = {name: {k: 'owlhome-' + k for k in C} for name in ('oak', 'mouse', 'pinecone', 'log', 'lantern', 'lanternLit')}
 
 if __name__ == '__main__':
     out = (sys.argv[1] if len(sys.argv) > 1 else B.HERE) + '/build'
@@ -98,7 +90,7 @@ if __name__ == '__main__':
                               ('moth', 'tiltL', left + 50, 0), ('hedwig', 'slowBlink', left + 82, 0)):
         O.use(name); blit(dict(O.FRAMES)[frame](), x - 16, floor - h + 1, B.rgb)
     x = 120
-    for t in (mouse(), pinecone(), feather(), lantern(), log_perch()):
+    for t in (mouse(), pinecone(), lantern(), log_perch()):
         blit(t, x, floor, hx); x += len(t[0]) + 4
     B.write_png(out + '/owl_home_preview.png', img, Wd * S, Ht * S, alpha=False)
     print('ok')

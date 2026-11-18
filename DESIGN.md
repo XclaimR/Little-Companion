@@ -92,13 +92,16 @@ One pet at a time; each keeps its own save (`state-mango.json`). Same engine as 
 ## Owls
 Change pet ▸ Owls. Four owls on the bird engine (species `owl`), drawn on an owl rig (`tools/art/owl_sheet.py`, built on the bird art helpers) and reviewed on screen at real size with the art-critic agent: **Moth** (barn owl: white heart face, black eyes, tall and slim), **Pip** (little owl: squat, white-spotted, yellow eyes under white brows), **Hedwig** (snowy owl: big, round and white with short black bars) and **Bramble** (long-eared owl: tawny, orange eyes, ear tufts that show mood like the cockatiel's crest). 32 frames each: perched (idle, front, blink, slow blink, head swivel over the shoulder, head tilts, tall-and-thin alert, fluffed), hoot A/B, waddle, pounce and mantling over a mouse, eat, take-off, flap cycle, long glide, landing flare, preen, wing-and-leg stretch, day doze on one leg, sleep, dream, the startled threat display (wings fanned like a shield), tumbling fall and recovery.
 
-- **Home (chosen):** a hollow oak for every owl (`tools/art/owl_home.py`): bare crooked branches to perch on, and a knothole it sleeps in by day, where you see its eyes glint in the dark. **Toys:** a mouse plush (its hunting toy: watch, pounce, mantle, carry), a pinecone to bat, a feather, a lantern that glows dusk to dawn, a log perch on the floor; it bathes in the birds' water dish.
+- **Home (chosen):** a hollow oak for every owl (`tools/art/owl_home.py`): bare crooked branches to perch on, and a knothole it sleeps in by day, where you see its eyes glint in the dark. **Toys:** a plush mouse (stalked and pounced on for fun, and carried up a branch and flung down), a pinecone to bat, a lantern that glows dusk to dawn, a log perch on the floor; it bathes in the birds' water dish. (A feather toy was tried and retired: lying upright it read as a grenade.)
 - **Behaviour (as built):**
   - **Night clock:** an owl's sleep pressure is the bird clock shifted 12 hours, so it sleeps in the knothole by day (about 10:00–18:00) and is up at night. Eyes glint in the knothole while it's home; asleep, it peeks out now and then. The lantern on the right branch is lit 18:00–07:00.
-  - **Hunting is how it eats:** it lands a little way from its mouse and stares for 3 s, pounces (the toy mouse goes under its wings), mantles, then eats. A hunt is never cut short by hunger.
+  - **Hunting is how it eats:** it hears a rustle in the floor, stares at the spot for 3 s, pounces, cloaks its wings over it and gulps with its head back. No prey is ever drawn. A hunt is never cut short by hunger.
+  - **The toy mouse is play, not food:** it stalks it, pounces and mantles over it, then lets it go; or it carries it up a branch in its talons, sits with it, flings it down (it falls under gravity) and swoops after it.
+  - **The lantern:** at night it likes to sit right by the lantern on the right branch, facing the light, and goes there first when it comes out after dark.
+  - **Never quite still:** perched, it looks over its shoulder, slow-blinks or ruffles every couple of seconds. On the floor it waddles slowly (anything further, it flies), and the pinecone rolls along the floor rather than jumping.
   - **Night life:** fewer flights (about 5 per waking hour in `simrun`), gliding most of the way; it bats the pinecone along the floor, perches on the log, and hoots at dusk (18:30–21:30) and dawn (4:30–7:00) with a drawn "hoo" (no sound).
   - **You:** near its perch, its head (not its body) follows the cursor: a swivel over its shoulder or a tilt. Woken by a click by day it gives you a slow look and goes back to sleep, without a startle. The busy-Mac retreat is the knothole. Window perches, riding and falling are the birds'.
-  - **Verified on screen** (Bramble, LC_TOP recording): perching on and riding a dragged window, the fall when it closed, the stare, pounce, mantle and eat at the mouse, the hoot on a branch, batting the pinecone, going into the knothole, the lantern.
+  - **Verified on screen** (Bramble, LC_TOP recordings, the night ones with `LC_HOUR=23`): perching on and riding a dragged window, the fall when it closed, eating (stare, pounce, mantle, gulp), carrying the mouse up a branch and flinging it, the hoot on a branch, batting the pinecone, sitting by the lit lantern, going into the knothole.
   - **Tests:** asleep by day and up through the night, eating by hunting, the daytime click, and four simulated owl days in `simrun [dogs] [hours] [seed] [birds] [owls]` (asleep ≥ 60% of 10:00–17:00, awake ≥ 40% of 22:00–04:00, hunts).
 
 ## Tooling & persistence
@@ -114,7 +117,7 @@ swift build -c release && .build/release/LittleCompanion   # the app
 swift run -c release simrun 4 24 1                          # 4 dogs × 24 h, seeds 1–4
 swift test                                                  # engine tests
 ```
-Env: `LC_DEBUG=1` debug overlay, ledges and a **Test** section in the 🐾 menu · `LC_TOP=1` draw above all windows · `LC_SPEED=4` run life 4× faster · `LC_BUSY=1` pretend the Mac is busy · `LC_DEMO=1` scripted tour (ball, plush, sit, kennel, zoomies). Delete `state.json` to adopt a new dog.
+Env: `LC_HOUR=23` pin the clock to an hour (night for an owl, the lantern) · `LC_DEBUG=1` debug overlay, ledges and a **Test** section in the 🐾 menu · `LC_TOP=1` draw above all windows · `LC_SPEED=4` run life 4× faster · `LC_BUSY=1` pretend the Mac is busy · `LC_DEMO=1` scripted tour (ball, plush, sit, kennel, zoomies). Delete `state.json` to adopt a new dog.
 
 ## Roadmap
 1. ~~Spike~~ — done; Swift chosen (see results above).
