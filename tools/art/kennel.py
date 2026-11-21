@@ -84,6 +84,12 @@ if __name__ == '__main__':
         it = items[k]
         grids[k] = [[None if ch == '.' else ch for ch in row.replace('|', '')] for row in it['rows']]
         KEYS[k] = {ch: tok for ch, tok in it['keys'].items() if ch != '.'}
+    for k, base in (('ball', 'r'), ('tennis', 'y')):   # rolling: the markings turn a quarter at a time, the shading stays put
+        g = grids[k]
+        for n in (1, 2, 3):
+            r = [list(row) for row in zip(*g[::-1])] if n == 1 else [list(row) for row in zip(*grids[f'{k}{n - 1}'][::-1])]
+            grids[f'{k}{n}'] = [[('s' if g[y][x] == 's' else base if c == 's' else c) for x, c in enumerate(row)] for y, row in enumerate(r)]
+            KEYS[f'{k}{n}'] = KEYS[k]
     import bird_home   # a bird's home rides in the same atlas, after the dogs' things
     grids.update(bird_home.grids()); KEYS.update(bird_home.KEYS)
     import owl_home    # and an owl's after that

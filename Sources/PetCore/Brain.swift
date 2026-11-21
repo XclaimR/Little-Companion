@@ -37,6 +37,7 @@ public struct Brain: Sendable {
         evolveNeeds(dt, circ: circ)
         decayPreferences(dt)
         s.x = min(max(s.x, env.minX), env.maxX)
+        for i in s.objects.indices { if let v = s.objects[i].vx { roll(i, v, dt, env) } }
         if s.emote != nil && s.time > s.emoteUntil { s.emote = nil }
         if let at = s.jumpAt, s.time - at >= (s.jumpLen ?? 0) + Brain.jumpLand { s.jumpAt = nil }
         if let at = s.jumpAt, let len = s.jumpLen, len > 0, s.time >= at, s.time < at + len, s.activity.destX == nil {
@@ -105,8 +106,9 @@ public struct Brain: Sendable {
             perform(&a, dt, env)
         }
         s.activity = a
-        if let c = s.carrying, let i = s.objects.firstIndex(where: { $0.id == c }) { s.objects[i].x = s.x + 36 * s.facing }
-        if a.remaining <= 0 && (a.destX == nil || a.act == .zoomies || a.act == .follow || a.act == .play) && !(a.act == .kennel && a.kennel != .exit) { finish(); decide(env) }
+        if let c = s.carrying, let i = s.objects.firstIndex(where: { $0.id == c }) { s.objects[i].x = s.x + 36 * s.facing; s.objects[i].vx = nil }
+        let ballRolling = a.act == .play && s.objects.contains { $0.id == a.target && $0.vx != nil }   // sees it stop before moving on
+        if a.remaining <= 0 && (a.destX == nil || a.act == .zoomies || a.act == .follow || a.act == .play) && !(a.act == .kennel && a.kennel != .exit) && !ballRolling { finish(); decide(env) }
         if s.activity.act == .sleep && s.activity.destX == nil { s.jumpAt = nil }   // never mid-air while lying asleep
         if s.activity.act == .kennel, s.activity.remaining <= 0, s.activity.kennel == .inside || s.activity.kennel == .enter,
            let k = s.objects.first(where: { $0.kind == .kennel }) {   // time's up: walk back out through the door first
@@ -233,7 +235,7 @@ public struct Brain: Sendable {
             pose.holding = o
             pose.toss = s.time < (s.tossUntil ?? 0)
         }
-        if a.act == .play, let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }) { pose.play = o.kind == .ball ? .chase : .shake }
+        if a.act == .play, let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }) { pose.play = o.kind == .ball ? .chase : .shake; pose.swipe = s.kickAt != nil }
         if a.act == .kennel && a.kennel != .door {
             pose.inKennel = true; pose.emote = nil
             if a.destX == nil { pose.anim = s.needs.tiredness > 0.3 ? .sleep : .sit }   // napping or sitting in its den
@@ -391,6 +393,7 @@ public struct Brain: Sendable {
 
     mutating func start(_ act: Act, target: String?, _ env: Environment) {
         var a = Activity(act: act, target: target, destX: nil, remaining: rand(act.duration), started: s.time)
+        s.kickAt = nil
         if act == .sleep { a.remaining *= 1 + 2 * Self.sleepiness(hour: env.hour) } // night sleeps run long
         let o = target.flatMap { id in s.objects.first { $0.id == id } }
         switch act {
@@ -432,6 +435,17 @@ public struct Brain: Sendable {
         s.activity = a
     }
 
+    static let ballFriction = 140.0   // points/s² a rolling ball slows by
+
+    /// A kicked ball rolls on, slowing to a stop, and bounces back off the ends of the floor.
+    mutating func roll(_ i: Int, _ v: Double, _ dt: Double, _ env: Environment) {
+        var v = v, x = s.objects[i].x + v * dt
+        if x < env.minX || x > env.maxX { x = min(max(x, env.minX), env.maxX); v = -v * 0.5 }
+        v -= (v > 0 ? 1 : -1) * min(abs(v), Self.ballFriction * dt)
+        s.objects[i].x = x
+        s.objects[i].vx = abs(v) < 4 ? nil : v
+    }
+
     /// Reached the destination.
     mutating func arrive(_ a: inout Activity, _ env: Environment) {
         if let o = a.target.flatMap({ id in s.objects.first { $0.id == id } }), a.act != .sleep, a.act != .carry || s.carrying == nil {
@@ -471,14 +485,23 @@ public struct Brain: Sendable {
             s.needs.boredom -= dt / 40
             if let id = a.target, let i = s.objects.firstIndex(where: { $0.id == id }) {
                 if s.objects[i].kind == .ball {
-                    // Chase: every few seconds the ball rolls off; it runs after it and pounces.
-                    if s.time >= (s.nextRoll ?? 0) {
-                        s.nextRoll = s.time + rand(2.5...5)
-                        let roll = (rand(0...1) < 0.5 ? -1.0 : 1.0) * rand(30...90)
-                        let bx = min(max(s.objects[i].x + roll, env.minX), env.maxX)
-                        s.objects[i].x = bx
-                        a.destX = bx + (s.x < bx ? -24 : 24)
-                        a.running = abs(bx - s.x) > 40
+                    // Chase: every few seconds it bats the ball (paw up, then the kick), runs after it and pounces.
+                    let bx = s.objects[i].x, side = bx + (s.x < bx ? -24 : 24)
+                    if s.objects[i].vx != nil {
+                        // still rolling: it waits where it's heading
+                    } else if abs(s.x - side) > 3 {   // stopped somewhere else (it bounced off the end): go over to it
+                        a.destX = min(max(side, env.minX), env.maxX); a.running = abs(side - s.x) > 40
+                    } else if s.jumpAt == nil, s.time >= (s.nextRoll ?? 0) {
+                        if s.kickAt == nil { s.kickAt = s.time + 0.3 }
+                        else if s.time >= s.kickAt! {
+                            s.kickAt = nil
+                            s.nextRoll = s.time + rand(2.5...5)
+                            let dir: Double = bx >= s.x ? 1 : -1, dist = rand(30...90)   // away from it
+                            s.objects[i].vx = dir * (2 * Self.ballFriction * dist).squareRoot()   // just enough to roll `dist`
+                            let rest = min(max(bx + dir * dist, env.minX), env.maxX)
+                            a.destX = min(max(rest - dir * 24, env.minX), env.maxX)
+                            a.running = dist > 40
+                        }
                     }
                 } else {
                     s.carrying = id   // grab and shake (plush, rope)

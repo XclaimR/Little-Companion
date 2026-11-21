@@ -153,7 +153,7 @@ enum ObjectSprite {
 
     /// The picture and its size in points (art pixels × DogSprite.pointsPerPixel).
     static func image(id: String, kind: String) -> (CGImage, CGSize) {
-        let key = id == "tennis" ? "tennis" : kind == "kennel" ? "kennelBack" : kind
+        let key = id == "tennis" ? kind.replacingOccurrences(of: "ball", with: "tennis") : kind == "kennel" ? "kennelBack" : kind
         if let hit = cache[key] { return hit }
         let r = rects[key] ?? rects["ball"]!
         let img = atlas.cropping(to: CGRect(x: r[0], y: r[1], width: r[2], height: r[3]))!

@@ -420,7 +420,7 @@ import QuartzCore
             }
         case .play:
             if p.play == .shake { return Int(t * 6) % 2 == 0 ? .shakeA : .shakeB }   // shaking the toy in its mouth
-            return Int(t * 3) % 2 == 0 ? .pawUp : .stand                               // batting at the ball
+            return p.swipe ? .pawUp : .stand                                            // paw up to bat the ball
         case .eat: return Int(t * 2.4 * p.pace) % 2 == 0 ? .eatA : .eatB                 // chewing, faster for gulpers
         case .drink: return Int(t * 6 * p.pace) % 2 == 0 ? .drinkA : .drinkB              // lapping
         case .sniff: return t.truncatingRemainder(dividingBy: 1.8) < 0.9 && Int(t * 8) % 2 == 0 ? .sniffB : .sniffA   // sniff-sniff, pause
@@ -507,7 +507,8 @@ import QuartzCore
         for o in brain.s.objects {
             // the bowls show what's going on: food going down as it eats (refilled a little later), ripples as it drinks
             let art = o.kind == .foodBowl ? (food > 0.66 ? "foodBowl" : food > 0.2 ? "foodBowlHalf" : "foodBowlEmpty")
-                    : o.kind == .waterBowl && lapping ? "waterBowlRipple" : o.kind.rawValue
+                    : o.kind == .waterBowl && lapping ? "waterBowlRipple"
+                    : o.kind == .ball ? Self.ballArt(o.x) : o.kind.rawValue
             let (img, size) = ObjectSprite.image(id: o.id, kind: art)
             let l = objectLayers[o.id] ?? {
                 let l = CALayer()
@@ -534,6 +535,13 @@ import QuartzCore
             if o.kind == .kennel { renderKennelFront(over: l, inKennel: p.inKennel) }
             if o.kind == .bed { renderBedRim(o, over: l, size: size, img: img, inBed: p.inBed == o.id) }
         }
+    }
+
+    /// A ball turns a quarter for every quarter of its circumference it rolls, so it rolls rather than slides.
+    static func ballArt(_ x: Double) -> String {
+        let quarter = Double.pi * 8 * Double(DogSprite.pointsPerPixel) / 4   // the ball is 8 art pixels across
+        let n = Int((x / quarter).rounded(.down)) & 3
+        return n == 0 ? "ball" : "ball\(n)"
     }
 
     /// The kennel is two pictures: the lit interior (behind the dog) and the walls and roof with the doorway and

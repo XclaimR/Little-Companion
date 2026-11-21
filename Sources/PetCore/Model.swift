@@ -46,6 +46,7 @@ public struct PetObject: Codable, Sendable, Identifiable, Equatable {
     public var kind: Kind
     public var x: Double // centre, points along the floor
     public var addedAt: Double
+    public var vx: Double? = nil   // rolling (a kicked ball): points/s; nil at rest. Optional so older saves load.
     public init(id: String, kind: Kind, x: Double, addedAt: Double = -1e9) {
         self.id = id; self.kind = kind; self.x = x; self.addedAt = addedAt
     }
@@ -162,6 +163,7 @@ public struct DogState: Codable, Sendable, Equatable {
     public var lastCursorX: Double?
     public var busyRetreat: Bool?       // went into the kennel because the Mac was busy
     public var nextRoll: Double?        // when the ball it's playing with next rolls away
+    public var kickAt: Double?          // paw raised: it bats the ball at this time
     public var nextDream: Double?       // when the next dream (twitching) starts while asleep
     public var sleepPos: SleepPos?
     public var posTaste: [String: Double]?   // hidden liking for each sleeping position, rolled once
@@ -241,6 +243,7 @@ public struct Pose: Sendable, Equatable {
     public var inBed: String? = nil         // id of the bed it's lying in
     public var holding: PetObject? = nil    // the toy in its mouth (the renderer picks its art)
     public var toss = false                 // flinging the held toy up
+    public var swipe = false                // paw raised, about to bat the ball
     public var wag = false                  // tail wagging
     public var groom: Groom? = nil
     public var fall: FallStage? = nil       // where it is in a stumble
