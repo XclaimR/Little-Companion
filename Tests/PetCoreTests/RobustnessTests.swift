@@ -93,3 +93,28 @@ private let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, curso
     #expect(bed.x - 30 >= k.x + 50)
     #expect(objs.allSatisfy { $0.x >= 40 && $0.x <= 1360 })
 }
+
+/// A save this build can't use is never written over: an unreadable one is moved aside, a newer one is left alone.
+@Test func storeNeverOverwritesASaveItCannotRead() throws {
+    let fm = FileManager.default, dir = fm.temporaryDirectory.appendingPathComponent("lc-store-\(UUID())")
+    try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    let real = Store.dir
+    defer { try? fm.removeItem(at: dir); Store.readOnly = []; Store.dir = real }
+    Store.dir = dir
+    let state = Brain(seed: 1).s
+
+    try Data("not json".utf8).write(to: Store.url("bean"))
+    #expect(Store.load("bean") == nil)
+    let aside = try fm.contentsOfDirectory(atPath: dir.path).filter { $0.contains("unreadable") }
+    #expect(aside.count == 1)
+    #expect(try String(contentsOf: dir.appendingPathComponent(aside[0]), encoding: .utf8) == "not json")
+
+    let newer = Data(#"{"savedAt": 0, "state": {"version": 99}}"#.utf8)
+    try newer.write(to: Store.url("mochi"))
+    #expect(Store.load("mochi") == nil)
+    Store.save(state, dog: "mochi")
+    #expect(try Data(contentsOf: Store.url("mochi")) == newer)
+
+    Store.save(state, dog: "pip")
+    #expect(Store.load("pip")?.state == state)
+}
