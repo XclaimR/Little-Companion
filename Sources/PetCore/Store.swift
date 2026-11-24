@@ -1,22 +1,21 @@
 import Foundation
-import PetCore
 
 /// Each dog's whole life in one versioned JSON file in Application Support. Writes are atomic.
 /// A save this build can't read is never overwritten: it's moved aside first, or (if that fails, or the save comes
 /// from a newer build) the dog is left read-only for this run and nothing is written over it.
-enum Store {
-    struct Saved: Codable { var savedAt: Date; var state: DogState }
+public enum Store {
+    public struct Saved: Codable { public var savedAt: Date; public var state: DogState }
     private struct Peek: Codable { struct S: Codable { var version: Int? }; var state: S }
 
-    static let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    nonisolated(unsafe) public internal(set) static var dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("LittleCompanion")
     /// Each dog keeps its own life; Ollie keeps the original file so older saves carry on.
     static func url(_ dog: String) -> URL { dir.appendingPathComponent(dog == "ollie" ? "state.json" : "state-\(dog).json") }
 
     /// Dogs whose save must not be written this run (saved by a newer build, or unreadable and couldn't be moved aside).
-    nonisolated(unsafe) static var readOnly: Set<String> = []
+    nonisolated(unsafe) public static var readOnly: Set<String> = []
 
-    static func load(_ dog: String) -> Saved? {
+    public static func load(_ dog: String) -> Saved? {
         let url = url(dog)
         guard let data = try? Data(contentsOf: url) else { return nil }
         if let v = (try? JSONDecoder().decode(Peek.self, from: data))?.state.version, v > DogState.currentVersion {
@@ -36,7 +35,7 @@ enum Store {
         }
     }
 
-    static func save(_ state: DogState, dog: String) {
+    public static func save(_ state: DogState, dog: String) {
         guard !readOnly.contains(dog) else { return }
         let url = url(dog)
         do {

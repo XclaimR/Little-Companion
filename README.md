@@ -4,7 +4,7 @@
 
 # Little Companion
 
-**A tiny pixel-art dog — or bird — that lives on your Mac's screen, and minds its own business.**
+**A tiny pixel-art dog, bird or owl that lives on your Mac's screen, and minds its own business.**
 
 [**Download for macOS**](https://github.com/XclaimR/Little-Companion/releases/latest) · macOS 14 Sonoma or later · Apple silicon & Intel · free and open source
 
@@ -12,7 +12,7 @@
 
 </div>
 
-Little Companion isn't a game and it isn't a to-do list with a mascot. There's nothing to feed on a timer, no notifications, and nothing to keep alive. It's closer to having a real dog asleep in the corner of the room while you work, or a bird perched on the edge of your screen. A dog naps, wanders off to sniff its toys, chases a ball for a minute, follows your cursor when it's curious, and sometimes just sits and looks at you, wagging its tail. A bird hops, preens and flutters up to sit on top of your windows.
+Little Companion isn't a game and it isn't a to-do list with a mascot. There's nothing to feed on a timer, no notifications, and nothing to keep alive. It's closer to having a real dog asleep in the corner of the room while you work, or a bird perched on the edge of your screen. A dog naps, wanders off to sniff its toys, chases a ball for a minute, follows your cursor when it's curious, and sometimes just sits and looks at you, wagging its tail. A bird hops, preens and flutters up to sit on top of your windows. An owl sleeps the day away in its oak and comes out after dark.
 
 It lives on the desktop layer, under your windows. It never steals focus, never blocks a click and makes no sound. You can forget it's there, and that's the point.
 
@@ -47,6 +47,19 @@ Birds live in a tall tree at the right of the screen, with a birdhouse on the tr
 - **A cockatiel's crest shows its mood**: up when excited or startled, flat when relaxed.
 - **Bird life**: hopping and pecking along the floor, preening, stretching a wing, eating seed, splashing in the water dish, swinging, ringing the bell, napping fluffed up on a branch, and sleeping the night in its birdhouse.
 
+## Meet the owls
+
+The night shift. Owls live in a hollow oak with a lantern that glows from dusk to dawn. By day they sleep in the knothole (you might catch eyes glinting, or a sleepy peek), and after dark they're up.
+
+| <img src="docs/owl-moth.gif" width="150" alt="Moth the barn owl"> | <img src="docs/owl-pip.gif" width="150" alt="Pip the little owl"> | <img src="docs/owl-hedwig.gif" width="150" alt="Hedwig the snowy owl"> | <img src="docs/owl-bramble.gif" width="150" alt="Bramble the long-eared owl"> |
+|:---:|:---:|:---:|:---:|
+| **Moth**<br>barn owl | **Pip**<br>little owl | **Hedwig**<br>snowy owl | **Bramble**<br>long-eared owl |
+
+- **Hunting:** a hungry owl hears a rustle, stares, pounces and mantles over its catch. Sometimes it's a beetle scuttling or a moth fluttering low, which it watches, stalks and catches.
+- **Playing:** stalking the toy mouse, or carrying it up a branch and dropping it to swoop after; batting a pinecone across the floor.
+- **Owl things:** sitting by the lantern, swivelling its head right round, following your cursor with its eyes, and a silent "hoo" at dusk and dawn.
+- Click a sleeping owl by day and you get a slow, unimpressed look, then back to sleep.
+
 ## Things you'll catch the dogs doing
 
 <img src="docs/moments.png" width="900" alt="Ollie: napping belly-up, carrying a ball, shaking a plush toy, sitting facing you, scratching an ear, jumping, after a tumble, sitting facing away">
@@ -67,7 +80,7 @@ Birds live in a tall tree at the right of the screen, with a birdhouse on the tr
 
 Your pet appears at the bottom of the screen, just above the Dock. Everything else is in the 🐾 menu-bar icon:
 
-- **Change pet**: Dogs ▸ Ollie, Biscuit, Mochi, Bean, Pepper · Birds ▸ Mango, Pearl, Kiwi, Sunny.
+- **Change pet**: Dogs ▸ Ollie, Biscuit, Mochi, Bean, Pepper · Birds ▸ Mango, Pearl, Kiwi, Sunny · Owls ▸ Moth, Pip, Hedwig, Bramble.
 - **Hide for an hour**: out of sight for a screen share or a demo. Your pet keeps living meanwhile.
 - **Open at login**: so your pet is there every morning.
 - **Quit**: your pet's life is saved and picks up where it left off.
@@ -77,7 +90,7 @@ To uninstall, quit from the 🐾 menu and drag the app to the Trash. Saved pets 
 ## FAQ
 
 **Will it slow my Mac down?**
-No. It's native Swift and Core Animation, at about 0.6% CPU while walking and close to zero while asleep. When your Mac is busy, the dog goes into its kennel, or the bird into its birdhouse.
+No. It's native Swift and Core Animation, at about 0.6% CPU while walking and close to zero while asleep. When your Mac is busy, the dog goes into its kennel, the bird into its birdhouse, or the owl into its hollow.
 
 **Does it collect any data or go online?**
 No. There's no network code at all. Everything stays in one file on your Mac.
@@ -89,7 +102,7 @@ No, on purpose. It's a little living thing, not a toy you control. Clicking near
 No. macOS tells every app where windows are, without any permission. The bird never sees what's inside them.
 
 **It hasn't moved for ages.**
-It's probably asleep. Pets sleep a lot, especially at night and after lunch.
+It's probably asleep. Pets sleep a lot, especially at night and after lunch. Owls are the other way round: they sleep all day.
 
 ## Build from source
 
@@ -104,14 +117,14 @@ swift run -c release LittleCompanion
 To make the double-clickable app and a zip for a release:
 
 ```sh
-scripts/package.sh v0.2.0     # dist/Little Companion.app and dist/LittleCompanion-v0.2.0.zip
+scripts/package.sh v0.3.0     # dist/Little Companion.app and dist/LittleCompanion-v0.3.0.zip
 ```
 
 ### For developers
 
 - `swift test` runs the behaviour engine's tests. `swift run -c release simrun 4 24 1` simulates 4 dogs for 24 hours and checks invariants.
 - `LC_DEBUG=1` adds an overlay and a Test menu. `LC_SPEED=4` speeds time up. `LC_DEMO=1` runs a scripted tour. `LC_TOP=1` draws above your windows, for recording.
-- The art is generated, not hand-pasted. `python3 tools/art/ollie_sheet.py tools/art <breed>` rebuilds a dog's sprite sheet; `python3 tools/art/bird_sheet.py tools/art` rebuilds the birds. `python3 tools/art/readme_media.py` rebuilds the pictures in this README.
+- The art is generated, not hand-pasted. `python3 tools/art/ollie_sheet.py tools/art <breed>` rebuilds a dog's sprite sheet; `python3 tools/art/bird_sheet.py tools/art` rebuilds the birds and `python3 tools/art/owl_sheet.py tools/art` the owls. `python3 tools/art/readme_media.py` rebuilds the pictures in this README.
 - [DESIGN.md](DESIGN.md) covers the design, how the behaviour engine thinks, and the roadmap.
 
 ## Contributing

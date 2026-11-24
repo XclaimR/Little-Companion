@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import PetCore
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory) // menu bar only, no Dock icon
@@ -63,7 +64,17 @@ app.run()
         item.menu = menu
         statusItem = item
 
-        world = World(screen: NSScreen.screens.first!)   // the menu-bar screen, where the Dock's floor is
+        // At login there may be no screen yet (lid shut, display asleep): the pet arrives when one does.
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.startWorld() }
+        }
+        startWorld()
+    }
+
+    /// The pet lives on the menu-bar screen, where the Dock's floor is.
+    func startWorld() {
+        guard world == nil, let screen = NSScreen.screens.first else { return }
+        world = World(screen: screen)
         world?.onStateChange = { [weak self] in self?.refreshDogMenu() }
         refreshDogMenu()
     }

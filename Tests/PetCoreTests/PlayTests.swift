@@ -139,3 +139,30 @@ import Testing
     #expect(gulper.secs < dawdler.secs * 0.6)
     #expect(gulper.sawHalf && dawdler.sawHalf && gulper.emptyAfter && gulper.fullLater)
 }
+
+/// A batted ball rolls: paw up first, then the ball moves a little each tick (never one jump), slows to a stop
+/// inside the floor, and the dog runs after it — near the ends too, where it bounces back.
+@Test func kickedBallRollsAndStaysOnTheFloor() {
+    for (seed, startX) in [(4, 500.0), (5, 70.0), (6, 1330.0)] {
+        var b = Brain(seed: UInt64(seed))
+        b.s.objects = [PetObject(id: "ball", kind: .ball, x: startX)]
+        b.s.x = startX + (startX < 700 ? 24 : -24)   // beside it, on the side away from the near end: kicks it into the end
+        let env = Environment(minX: 40, maxX: 1360, hour: 11, userIdle: 0, cursorX: nil)
+        b.debugStart(.play, target: "ball", env: env)
+        var kicks = 0, swiped = false, biggestStep = 0.0, dogMoved = false, last = startX
+        for _ in 0..<(30 * 20) {
+            let rolling = b.s.objects[0].vx != nil, dogX = b.s.x
+            b.update(dt: 0.05, env: env)
+            guard b.s.activity.act == .play else { break }
+            if b.pose.swipe { swiped = true }
+            let x = b.s.objects[0].x
+            #expect(x >= env.minX && x <= env.maxX)
+            if !rolling && b.s.objects[0].vx != nil { kicks += 1; #expect(swiped); swiped = false }
+            biggestStep = max(biggestStep, abs(x - last)); last = x
+            if rolling && b.s.x != dogX { dogMoved = true }
+        }
+        #expect(kicks >= 2)
+        #expect(biggestStep < 10)   // 160 pt/s at most: under 8 pt a tick, no teleport
+        #expect(dogMoved)
+    }
+}
