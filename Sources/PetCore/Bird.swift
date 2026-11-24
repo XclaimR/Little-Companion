@@ -154,16 +154,16 @@ public func repairBirdHome(_ objects: inout [PetObject], maxX: Double) {
 }
 
 /// Window tops it may land on, with the spots along each top edge: an ordinary window at least 200 pt wide on its
-/// screen, with ≥ 48 pt of clear space above (so not maximised under the menu bar), at a spot no window in front
-/// covers, and clear of the traffic-light buttons at the left.
+/// screen, with ≥ 48 pt of room below the menu bar, at a spot where no other window — in front of it or behind it —
+/// overlaps the 48 pt the bird takes up above the edge (it's drawn behind every window, so it would be hidden), and
+/// clear of the traffic-light buttons at the left.
 public func perchableWindows(_ env: Environment) -> [(win: Win, xs: [Double])] {
     var out: [(Win, [Double])] = []
-    for (i, w) in env.windows.enumerated() where w.box.w >= 200 && w.box.y - env.topY >= 48 && w.box.y < env.floorY - 60 {
-        let front = env.windows[..<i]
+    for w in env.windows where w.box.w >= 200 && w.box.y - env.topY >= 48 && w.box.y < env.floorY - 60 {
         var xs: [Double] = []
         var x = w.box.x + 96
         while x <= w.box.maxX - 24 {
-            let covered = front.contains { $0.box.x - 24 <= x && x <= $0.box.maxX + 24 && $0.box.y <= w.box.y + 4 && $0.box.maxY >= w.box.y - 48 }
+            let covered = env.windows.contains { $0.id != w.id && $0.box.x - 24 <= x && x <= $0.box.maxX + 24 && $0.box.y <= w.box.y + 4 && $0.box.maxY >= w.box.y - 48 }
             if !covered && x >= env.minX && x <= env.maxX { xs.append(x) }
             x += 24
         }

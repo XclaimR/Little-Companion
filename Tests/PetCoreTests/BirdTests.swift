@@ -34,6 +34,16 @@ private func perchedBird(seed: UInt64 = 7) -> Brain {
     #expect(perchableWindows(env([Win(id: 5, box: Box(x: 150, y: 250, w: 700, h: 500)), editor])).allSatisfy { $0.win.id != 1 })   // fully covered
 }
 
+/// Your screen on 25 Nov: Phone in front of Docker Desktop, Phone's top edge inside Docker's window.
+@Test func noPerchWhereAWindowBehindWouldHideIt() {
+    var e = env([Win(id: 1, box: Box(x: 202, y: 170, w: 948, h: 640)),     // Phone, in front
+                 Win(id: 2, box: Box(x: 54, y: 130, w: 1272, h: 720))])    // Docker Desktop, behind it
+    e.topY = 34
+    let spots = perchableWindows(e)
+    #expect(spots.map(\.win.id) == [2])   // Docker's top edge yes; on Phone's the bird would be behind Docker
+    #expect(spots[0].xs.count > 30)
+}
+
 @Test func ridesAWindowBeingDragged() {
     var b = perchedBird()
     var w = editor
