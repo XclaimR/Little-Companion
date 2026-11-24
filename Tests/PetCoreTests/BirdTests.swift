@@ -282,3 +282,17 @@ private func carryAbout(_ b: inout Brain, _ toy: String, _ e: Environment) -> (l
     }
     #expect(looks(curiosity: 0.05) < looks(curiosity: 0.95))
 }
+
+@Test func comingToAClearDesktopSometimesGetsAShow() {
+    let busy = env([Win(id: 1, box: Box(x: 40, y: 60, w: 900, h: 700)), Win(id: 2, box: Box(x: 500, y: 100, w: 800, h: 650)), Win(id: 3, box: Box(x: 100, y: 300, w: 600, h: 400))])
+    var shows = 0
+    for seed in 1...60 as ClosedRange<UInt64> {
+        var b = Brain(seed: seed, species: .bird)
+        b.s.objects = birdHome(maxX: 1400); b.s.x = 600; b.s.perch = "floor"
+        b.s.activity = Activity(act: .idle, target: nil, destX: nil, remaining: 600, started: 0); b.s.nextInterruptCheck = 1e9
+        for _ in 0..<5 { b.update(dt: 0.1, env: busy) }
+        b.update(dt: 0.1, env: env([]))   // you switch to an empty desktop
+        if b.s.activity.act == .zoomies || b.s.activity.act == .fly { shows += 1 }
+    }
+    #expect(shows > 10 && shows < 35, "\(shows) of 60")   // about one time in three, not every time
+}

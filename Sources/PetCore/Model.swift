@@ -188,6 +188,7 @@ public struct DogState: Codable, Sendable, Equatable {
     public var prey: Prey?              // the beetle or moth a hungry owl is after
     public var boutUntil: Double?       // preening comes in bouts, with pauses to look round between them
     public var zoomVX: Double?, zoomVY: Double?   // on a joy flight: its velocity (it steers, turning at a limited rate)
+    public var wasClear: Bool?          // the desktop was fairly clear last tick (to notice you arriving on it)
 }
 
 /// What the outside world tells the brain each tick.

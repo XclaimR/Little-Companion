@@ -234,7 +234,7 @@ extension Brain {
         let wins = perchableWindows(env)
         for (w, xs) in wins where "w:\(w.id)" != s.perch {
             let x = xs[Int.random(in: xs.indices, using: &s.rng)]
-            var weight = (0.3 + 2 * s.personality.curiosity) / sqrt(Double(wins.count))
+            var weight = (1.0 + 2 * s.personality.curiosity) / sqrt(Double(wins.count))   // window tops are where you'll find it
             if nearYou, let cx = env.cursorX, let cy = env.cursorY { weight = 1 / (1 + pow(hypot(x - cx, w.box.y - cy) / 150, 2)) }
             options.append((Spot(perch: "w:\(w.id)", x: x, y: w.box.y, dx: x - w.box.x), weight))
         }
@@ -279,12 +279,9 @@ extension Brain {
         }
         let onGround = s.perch == "floor" || s.perch == "log" || windowID(s.perch) != nil
         c.append(.init(act: .fly, target: nil, score: (isOwl ? 0.11 : 0.18) * (0.2 + p.energy) * (1 - 0.6 * n.tiredness) * (1 - 0.85 * circ)))   // energetic birds fly more; owls less
-        // A joy flight: swooping about the desktop without landing, when it's lively, rested and happy. At most every half hour.
-        let screenArea = (env.maxX - env.minX + 80) * max(1, env.floorY - env.topY)
-        let covered = env.windows.reduce(0) { $0 + $1.box.w * $1.box.h } / screenArea   // overlaps count twice: a rough measure is enough
-        let clearDesktop = env.windows.count <= 2 || covered < 0.35   // only when it'll be seen, not mostly behind your work
-        if !calm, clearDesktop, s.time - (s.lastDone[.zoomies] ?? -1e9) > 1800 {
-            c.append(.init(act: .zoomies, target: nil, score: 0.25 * p.energy * pow(1 - n.tiredness, 2) * (0.3 + n.boredom) * mood * night))
+        // A joy flight: swooping about the desktop without landing, when it's lively, rested and happy. At most every 15 minutes.
+        if !calm, clearDesktop(env), s.time - (s.lastDone[.zoomies] ?? -1e9) > 900 {
+            c.append(.init(act: .zoomies, target: nil, score: 0.5 * p.energy * pow(1 - n.tiredness, 2) * (0.3 + n.boredom) * mood * night))
         }
         c.append(.init(act: .hop, target: nil, score: 0.3 * (0.4 + p.energy) * (onGround ? 1 : 0.4) * (1 - 0.85 * circ)))
         c.append(.init(act: .peck, target: nil, score: 0.25 * (0.3 + p.curiosity) * (0.5 + n.hunger) * (onGround ? 1 : 0.3) * (1 - 0.8 * circ)))
@@ -372,6 +369,7 @@ extension Brain {
     mutating func birdArrive(_ a: inout Activity, _ env: Environment) {
         if let o = s.objects.first(where: { $0.id == a.target }), a.act != .splash { s.facing = o.x >= s.x ? 1 : -1 }
         if a.act == .bell { s.facing = 1 }
+        if a.act == .fly && windowID(s.perch) != nil { a.remaining = rand(60...240) }   // up on a window top it settles in a while: that's where you'll find it
         if a.act == .zoomies { a.phase = "settled"; a.remaining = rand(2...4) }   // catches its breath
         if a.act == .groom { a.phase = "preen"; s.boutUntil = s.time + preenBout() }
         if a.act == .hunt { s.huntAt = s.time; a.remaining = a.target == "mouse" ? 8 : 30; a.phase = nil }
@@ -476,6 +474,12 @@ extension Brain {
     /// Off to a spot. Of a few arcs it takes the one most out in the open (through the gaps between windows);
     /// if there's none, it is glimpsed passing behind them.
     static let zoomSpeed = 320.0
+    /// Few windows open, or they cover little of the screen: what it does now will be seen, not hidden behind your work.
+    func clearDesktop(_ env: Environment) -> Bool {
+        let screenArea = (env.maxX - env.minX + 80) * max(1, env.floorY - env.topY)
+        let covered = env.windows.reduce(0) { $0 + $1.box.w * $1.box.h } / screenArea   // overlaps count twice: a rough measure is enough
+        return env.windows.count <= 2 || covered < 0.35
+    }
     /// A point in the open air somewhere across the desktop, well away from where it is now: a waypoint for a joy flight.
     /// `heading`: the way it's flying now; points roughly ahead are preferred, so it swoops on rather than doubling back.
     mutating func zoomPoint(_ env: Environment, heading: (Double, Double)? = nil) -> Spot {
@@ -687,6 +691,16 @@ extension Brain {
 
         if s.flight != nil { flyTick(env, dt); return }   // in the air: nothing else until it lands
         guard perchTick(dt, env) else { return }
+        // You've just come to a clear desktop (an empty Space, Show Desktop): now and then it puts on a show for you —
+        // a joy flight, or off to sit on a window top. About one time in three, never while it sleeps or eats.
+        let clear = clearDesktop(env), act = s.activity.act
+        defer { s.wasClear = clear }
+        if clear, s.wasClear == false, !calm, !inHouse, ![.sleep, .eat, .drink, .hunt, .carry, .kennel].contains(act), rand(0...1) < 0.35 {
+            finish()
+            if s.time - (s.lastDone[.zoomies] ?? -1e9) > 600 { birdStart(.zoomies, target: nil, env) }
+            else { birdStart(.fly, target: nil, env) }
+            return
+        }
 
         if s.time >= s.nextInterruptCheck {
             s.nextInterruptCheck = s.time + 3
