@@ -21,6 +21,7 @@ extension World {
             // it keeps its picture of your desktop's windows as they were, so nothing it's doing there is disturbed.
             if !fresh.contains(where: { $0.rect.width >= screenW - 1 && $0.rect.maxY >= screenH - 1 }) {
                 windows = fresh.map { Win(id: $0.id, box: Box(x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height)) }
+                desktopSeen = true
             }
         }
         var e = Environment(minX: Double(minX), maxX: Double(maxX), hour: hour, userIdle: idle, cursorX: nil,
@@ -29,6 +30,7 @@ extension World {
         e.floorY = Double(floorY)
         e.topY = NSScreen.screens.first.map { Double($0.frame.maxY - $0.visibleFrame.maxY) } ?? 25
         e.windows = windows
+        e.desktopUnknown = !desktopSeen
         if let p = s.perch, p.hasPrefix("w:"), let id = Int(p.dropFirst(2)), !windows.contains(where: { $0.id == id }) {
             e.windowClosed = !windowExists(id)   // gone for good, or just minimised / on another Space
         }
@@ -312,6 +314,12 @@ extension World {
         let env = environment()
         if log { print("fly to a window: \(env.windows.count) windows, \(perchableWindows(env).count) to perch on"); fflush(stdout) }
         brain.debugFlyToWindow(env: env); render()
+    }
+    /// LC_DEMO=window: off to a window top as soon as it has seen your desktop (it ignores full-screen apps); tries for 2 minutes.
+    func flyToWindowWhenSeen(_ tries: Int = 0) {
+        testFlyToWindow()
+        guard brain.s.flight == nil, tries < 60 else { return }
+        Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.flyToWindowWhenSeen(tries + 1) } }
     }
     func testWindowClosed() { brain.debugWindowClosed(env: environment()); render() }
     func testHunt() { brain.s.needs.hunger = max(brain.s.needs.hunger, 0.6); test(.hunt, nil) }   // a rustle in the floor: it eats

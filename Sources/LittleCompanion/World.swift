@@ -12,6 +12,7 @@ import QuartzCore
     var kennelFront: CALayer?
     var swingLayer: CALayer?, bellLayer: CALayer?, holeLayer: CALayer?   // a bird's: its swing, its bell, its shadow in the birdhouse window and door
     var glowLayer: CALayer?, houseEnteredAt: CFTimeInterval?             // the birdhouse window's evening lamp
+    var desktopSeen = false   // a bird has seen your desktop's own windows (not only a full-screen app's)
     var glintLayer: CALayer?, lanternLayer: CALayer?, preyLayer: CALayer?   // an owl's: its eyes glinting in the knothole, its lantern, its prey
     var windows: [Win] = [], windowsAt: CFTimeInterval = 0              // other apps' windows, polled for a bird
     let zzzLayer = CALayer()   // z's that puff up now and then while asleep, animated by Core Animation
@@ -133,7 +134,7 @@ import QuartzCore
         if ProcessInfo.processInfo.environment["LC_DEMO"] == "zoomies" && DogSprite.isBird {   // LC_DEMO=zoomies: just a long joy flight
             Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(.zoomies) } }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] == "window" && DogSprite.isBird {   // LC_DEMO=window: off to a window top, to sit there
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.flyToWindowWhenSeen() } }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
             Timer.scheduledTimer(withTimeInterval: 24, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testHunt() } }

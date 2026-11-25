@@ -275,6 +275,15 @@ private func carryAbout(_ b: inout Brain, _ toy: String, _ e: Environment) -> (l
     #expect(!b.birdCandidates(busy).contains { $0.act == .zoomies })   // three big windows over most of the screen: not now
 }
 
+@Test func noJoyFlightsBeforeItHasSeenYourDesktop() {
+    var b = Brain(seed: 2, species: .bird)
+    b.s.objects = birdHome(maxX: 1400); b.s.x = 600; b.s.perch = "floor"
+    b.s.needs = Needs(hunger: 0, thirst: 0, tiredness: 0, boredom: 1); b.s.personality.energy = 1
+    var unknown = env([]); unknown.desktopUnknown = true
+    #expect(b.birdCandidates(env([])).contains { $0.act == .zoomies })
+    #expect(!b.birdCandidates(unknown).contains { $0.act == .zoomies })
+}
+
 @Test func preeningComesInBoutsAndOnlyCuriousBirdsStopToLookRound() {
     func looks(curiosity: Double) -> Int {
         var b = Brain(seed: 6, species: .bird)

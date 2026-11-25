@@ -213,6 +213,7 @@ public struct Environment: Sendable {
     public var cursorY: Double?         // a bird's cursor is anywhere on its screen (cursorX too)
     public var windows: [Win] = []      // other apps' ordinary windows on its screen, front to back
     public var windowClosed = false     // the window it's perched on has gone because it was closed (not minimised or another Space)
+    public var desktopUnknown = false   // it hasn't seen your desktop yet (you've been in a full-screen app): no windows, and not "clear"
     public init(minX: Double, maxX: Double, hour: Double, userIdle: Double, cursorX: Double?, systemBusy: Bool = false,
                 reduceMotion: Bool = false, kennelDoorOutside: Double = 88, kennelInside: ClosedRange<Double> = -16...0, mouthReach: Double = 28) {
         self.minX = minX; self.maxX = maxX; self.hour = hour; self.userIdle = userIdle; self.cursorX = cursorX; self.systemBusy = systemBusy

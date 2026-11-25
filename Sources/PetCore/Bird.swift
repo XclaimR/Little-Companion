@@ -476,6 +476,7 @@ extension Brain {
     static let zoomSpeed = 320.0
     /// Few windows open, or they cover little of the screen: what it does now will be seen, not hidden behind your work.
     func clearDesktop(_ env: Environment) -> Bool {
+        if env.desktopUnknown { return false }
         let screenArea = (env.maxX - env.minX + 80) * max(1, env.floorY - env.topY)
         let covered = env.windows.reduce(0) { $0 + $1.box.w * $1.box.h } / screenArea   // overlaps count twice: a rough measure is enough
         return env.windows.count <= 2 || covered < 0.35
