@@ -16,8 +16,12 @@ extension World {
         if now - windowsAt >= (onWindow ? 1.0 / 15 : 1) {
             windowsAt = now
             let screen = CGRect(origin: .zero, size: screenFrame.size)   // CG window bounds are relative to the menu-bar screen, where it lives
-            windows = otherWindows().filter { screen.intersects($0.rect) }
-                .map { Win(id: $0.id, box: Box(x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height)) }
+            let fresh = otherWindows().filter { screen.intersects($0.rect) }
+            // A full-screen app (a window over the whole screen, Dock area too) is on its own Space, where the bird isn't:
+            // it keeps its picture of your desktop's windows as they were, so nothing it's doing there is disturbed.
+            if !fresh.contains(where: { $0.rect.width >= screenW - 1 && $0.rect.maxY >= screenH - 1 }) {
+                windows = fresh.map { Win(id: $0.id, box: Box(x: $0.rect.minX, y: $0.rect.minY, w: $0.rect.width, h: $0.rect.height)) }
+            }
         }
         var e = Environment(minX: Double(minX), maxX: Double(maxX), hour: hour, userIdle: idle, cursorX: nil,
                             systemBusy: systemBusy(), reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
@@ -304,7 +308,11 @@ extension World {
 
     // MARK: - Debug menu
 
-    func testFlyToWindow() { brain.debugFlyToWindow(env: environment()); render() }
+    func testFlyToWindow() {
+        let env = environment()
+        if log { print("fly to a window: \(env.windows.count) windows, \(perchableWindows(env).count) to perch on"); fflush(stdout) }
+        brain.debugFlyToWindow(env: env); render()
+    }
     func testWindowClosed() { brain.debugWindowClosed(env: environment()); render() }
     func testHunt() { brain.s.needs.hunger = max(brain.s.needs.hunger, 0.6); test(.hunt, nil) }   // a rustle in the floor: it eats
 }

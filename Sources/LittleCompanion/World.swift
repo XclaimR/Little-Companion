@@ -132,6 +132,8 @@ import QuartzCore
         tick()
         if ProcessInfo.processInfo.environment["LC_DEMO"] == "zoomies" && DogSprite.isBird {   // LC_DEMO=zoomies: just a long joy flight
             Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.test(.zoomies) } }
+        } else if ProcessInfo.processInfo.environment["LC_DEMO"] == "window" && DogSprite.isBird {   // LC_DEMO=window: off to a window top, to sit there
+            Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
         } else if ProcessInfo.processInfo.environment["LC_DEMO"] != nil && DogSprite.isOwl {   // an owl's tour: a window, a hunt, a hoot, the pinecone, its knothole
             Timer.scheduledTimer(withTimeInterval: 2, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testFlyToWindow() } }
             Timer.scheduledTimer(withTimeInterval: 24, repeats: false) { [weak self] _ in MainActor.assumeIsolated { self?.testHunt() } }
